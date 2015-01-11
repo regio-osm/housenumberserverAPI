@@ -1,4 +1,4 @@
-package de.diesei.hausnummern;
+package de.regioosm.housenumberserver;
 import java.io.FileReader;
 import java.io.Reader;
 import java.util.Properties;
@@ -36,7 +36,7 @@ public class Applicationconfiguration {
 	public Applicationconfiguration () {
 			// get some configuration infos
 		//String configuration_filename = "hausnummern.properties";
-		String configuration_filename = "/home/openstreetmap/NASI/OSMshare/programme/workspace/housenumberserverJavaServlet/housenumberclient.properties";
+		String configuration_filename = "/home/openstreetmap/NASI/OSMshare/programme/git/housenumberserverAPI/housenumberclient.properties";
 System.out.println("configuration_filename ===" + configuration_filename+ "===");
 
 	try {
