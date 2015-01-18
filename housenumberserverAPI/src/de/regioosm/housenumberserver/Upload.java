@@ -20,9 +20,9 @@ import javax.servlet.http.HttpServletResponse;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Statement;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.*;
@@ -118,24 +118,65 @@ public class Upload extends HttpServlet {
 			String url_hausnummern = configuration.db_application_url;
 			con_hausnummern = DriverManager.getConnection(url_hausnummern, configuration.db_application_username, configuration.db_application_password);
 
-				// change to transaction mode
-			con_hausnummern.setAutoCommit(false);
+			System.out.println("beginn von insertfkt");
 			
 			String select_sql = "SELECT land.id AS countryid, stadt.id AS municipalityid, jobs.id AS jobid"
 				+ " FROM land, stadt, gebiete, jobs WHERE"
-				+ " land = '" + country.replace("'", "''") + "'"
-				+ " AND stadt = '" + municipality.replace("'", "''") + "'"
+				+ " land = ?"
+				+ " AND stadt = ?"
 				+ " AND gebiete.stadt_id = stadt.id"
 				+ " AND jobs.gebiete_id = gebiete.id"
 				+ " AND stadt = jobname"
 				+ " ORDER BY admin_level;";
 
+			PreparedStatement selectqueryStmt = con_hausnummern.prepareStatement(select_sql);
+			selectqueryStmt.setString(1, country);
+			selectqueryStmt.setString(2, municipality);
+			ResultSet existingmunicipalityRS = selectqueryStmt.executeQuery();
+
+			
+			String deletelastevaluationSql = "DELETE FROM auswertung_hausnummern"
+					+ " WHERE land_id = ? AND stadt_id = ? AND job_id = ?;";
+			PreparedStatement deletelastevaluationStmt = con_hausnummern.prepareStatement(deletelastevaluationSql);
+			
+			String selectstreetid_sql = "SELECT id FROM strasse where strasse = ?;";
+			PreparedStatement selectstreetidstmt = con_hausnummern.prepareStatement(selectstreetid_sql);
+
+			String selectallofficialstreetsSql = "SELECT DISTINCT ON (strasse) strasse, strasse.id AS id"
+				+ " FROM stadt_hausnummern, strasse, stadt, land"
+				+ " WHERE stadt_hausnummern.strasse_id = strasse.id"
+				+ " AND stadt_hausnummern.stadt_id = stadt.id"
+				+ " AND stadt_hausnummern.land_id = land.id"
+				+ " AND stadt = ? AND land = ?;";
+			PreparedStatement selectallofficialstreetsStmt = con_hausnummern.prepareStatement(selectallofficialstreetsSql);
+			
+			String insertstreetsql = "INSERT INTO strasse (strasse) VALUES (?) returning id;";
+			PreparedStatement insertstreetstmt = con_hausnummern.prepareStatement(insertstreetsql);
+			
+			String inserthousenumberWithGeometrySql = "INSERT INTO auswertung_hausnummern"
+					+ " (land_id, stadt_id, job_id, copyland, copystadt, copystrasse,"
+					+ " strasse_id, hausnummer, hausnummer_sortierbar, treffertyp,"
+					+ " osm_objektart, osm_id, objektart, point"
+					+ ")"
+					+ " VALUES(?, ?, ?, ?, ?, ?,"
+					+ " ?, ?, ?, ?,"
+					+ " ?, ?, ?, ST_Setsrid(ST_Makepoint(?, ?), 4326));";
+			PreparedStatement inserthousenumberWithGeometryStmt = con_hausnummern.prepareStatement(inserthousenumberWithGeometrySql);
+
+			String inserthousenumberWithoutGeometrySql = "INSERT INTO auswertung_hausnummern"
+					+ " (land_id, stadt_id, job_id, copyland, copystadt, copystrasse,"
+					+ " strasse_id, hausnummer, hausnummer_sortierbar, treffertyp,"
+					+ " osm_objektart, osm_id, objektart"
+					+ ")"
+					+ " VALUES(?, ?, ?, ?, ?, ?,"
+					+ " ?, ?, ?, ?,"
+					+ " ?, ?, ?);";
+			PreparedStatement inserthousenumberWithoutGeometryStmt = con_hausnummern.prepareStatement(inserthousenumberWithoutGeometrySql);
+
+
 			int countryid = 0;
 			int municipalityid = 0;
 			int jobid = 0;
-	
-			Statement selectqueryStmt = con_hausnummern.createStatement();
-			ResultSet existingmunicipalityRS = selectqueryStmt.executeQuery(select_sql);
 
 					//TODO check and code, what happens with more than one row
 			if (existingmunicipalityRS.next()) {
@@ -145,17 +186,17 @@ public class Upload extends HttpServlet {
 			} else {
 				return "Error: There is no matching municipality '" + municipality + "' within the country '" + country + "' in the server side housenumber database. The uploaded result will be suspended";
 			}
-
-			Statement createorupdateStmt = con_hausnummern.createStatement();
+			
 
 				// delete up to now active evaluation for same municipality
 				// It will be checked against jobname = municipality name to only delete complete municipality evaluation, 
 				// not optionally available subadmin evaluations
-			String deleteauswertunghausnummern_sql = "DELETE FROM auswertung_hausnummern"
-				+ " WHERE land_id = " + countryid + " AND stadt_id = " + municipalityid + " AND job_id = " + jobid + ";";
-			System.out.println("deleteauswertunghausnummern statement ===" + deleteauswertunghausnummern_sql + "===");
+			System.out.println("deleteauswertunghausnummern statement ===" + deletelastevaluationSql + "===");
 			try {
-				createorupdateStmt.executeUpdate( deleteauswertunghausnummern_sql );
+				deletelastevaluationStmt.setInt(1, countryid);
+				deletelastevaluationStmt.setInt(2, municipalityid);
+				deletelastevaluationStmt.setInt(3, jobid);
+				deletelastevaluationStmt.executeUpdate();
 			}
 			catch( SQLException e) {
 				System.out.println("ERROR, when tried to delete rows for old evaluation, but import will continue");
@@ -165,11 +206,34 @@ public class Upload extends HttpServlet {
 				// storage of streetnames and their internal DB id. If a street is missing in DB, it will be inserted,
 				// before the insert of the housenumbers at the streets will be inserted
 			HashMap<String, Integer> street_idlist = new HashMap<String, Integer>();
+
+			int numberStreetsFromOfficialList = 0;
+			int numberStreetsLoadedDynamically = 0;
+			int numberStreetInsertedIntoDB = 0;
+			try {
+				selectallofficialstreetsStmt.setString(1, municipality);
+				selectallofficialstreetsStmt.setString(2, country);
+				ResultSet selectallofficialstreetsRS = selectallofficialstreetsStmt.executeQuery();
+				while(selectallofficialstreetsRS.next()) {
+					street_idlist.put(selectallofficialstreetsRS.getString("strasse"), selectallofficialstreetsRS.getInt("id"));
+					numberStreetsFromOfficialList++;
+				}
+			}
+			catch( SQLException e) {
+				System.out.println("ERROR, when tried to get all official street names from municipality ===" + municipality + "=== in country ===" + country + "===");
+				e.printStackTrace();
+			}
+
+
+				// change to transaction mode
+			con_hausnummern.setAutoCommit(false);
+
 				// store column names, below found in file header line
 			HashMap<Integer, String> headerfield = new HashMap<Integer, String>();
 			String lines[] = content.split("\n");
 
 				// loop over all result file lines
+			java.util.Date loopstart = new java.util.Date();
 			for(int lineindex = 0; lineindex < lines.length; lineindex++) {
 				String actline = lines[lineindex];
 				if(actline == "")
@@ -237,74 +301,113 @@ public class Upload extends HttpServlet {
 					actosmid = Long.parseLong(field.get("osmid"));
 				System.out.println("actosmid ===" + actosmid + "===");
 
-				String actlonlat = null;
+				double actlon = 0.0D;
+				double actlat = 0.0D;
 				if((field.get("lonlat") != null) && ! field.get("lonlat").equals("")) {
-					actlonlat = "ST_GeomFromText('POINT(" + field.get("lonlat") + ")',4326)";
+					String lonlat_parts[] = field.get("lonlat").split(" ");
+					actlon = Double.parseDouble(lonlat_parts[0]);
+					actlat = Double.parseDouble(lonlat_parts[1]);
+					inserthousenumberWithGeometryStmt.setDouble(8, 10.2);
+					inserthousenumberWithGeometryStmt.setDouble(9, 50.1);
+
 				}
-				
-				System.out.println("actlonlat ===" + actlonlat + "===");
-				
+				System.out.println("actlon ===" + actlon + "===    actlat ===" + actlat + "===");
+
 				if(! street_idlist.containsKey(actstreet)) {
-					select_sql = "SELECT id FROM strasse where strasse = '" + actstreet.replace("'", "''") + "';";
-					ResultSet insertstreetRS = selectqueryStmt.executeQuery(select_sql);
-					if (insertstreetRS.next()) {
-						street_idlist.put(actstreet, insertstreetRS.getInt("id"));
+					selectstreetidstmt.setString(1, actstreet);
+					System.out.println("query for street ===" + actstreet + "=== ...");
+					ResultSet selstreetRS = selectstreetidstmt.executeQuery();
+					if (selstreetRS.next()) {
+						street_idlist.put(actstreet, selstreetRS.getInt("id"));
+						numberStreetsLoadedDynamically++;
 					} else {
-						String insert_sql = "INSERT INTO strasse (strasse) VALUES ('" + actstreet.replace("'", "''") + "');";
-						System.out.println("insert_sql statement ===" + insert_sql + "===");
-						String[] dbautogenkeys = { "id" };
+						insertstreetstmt.setString(1, actstreet);
+						System.out.println("insert_sql statement ===" + insertstreetsql + "===");
 						try {
-							createorupdateStmt.executeUpdate( insert_sql, dbautogenkeys );
-							ResultSet rs_getautogenkeys = createorupdateStmt.getGeneratedKeys();
+							ResultSet rs_getautogenkeys = insertstreetstmt.executeQuery();
 						    if (rs_getautogenkeys.next()) {
 								street_idlist.put(actstreet, rs_getautogenkeys.getInt("id"));
+								numberStreetInsertedIntoDB++;
 						    } 
 						    rs_getautogenkeys.close();
 						}
 						catch( SQLException e) {
-							System.out.println("ERROR: during insert in table evaluation_overview, insert code was ===" + insert_sql + "===");
+							System.out.println("ERROR: during insert in table evaluation_overview, insert code was ===" + insertstreetsql + "===");
 							System.out.println(e.toString());
 						}
 					}
 				}
-
-				String insert_sql = "INSERT INTO auswertung_hausnummern"
-					+ " (land_id, stadt_id, job_id, copyland, copystadt, copystrasse,"
-					+ " strasse_id, hausnummer, hausnummer_sortierbar, treffertyp,"
-					+ " osm_objektart, osm_id, objektart, point"
-					+ ")"
-					+ " VALUES("
-					+ countryid + ","
-					+ municipalityid + "," 
-					+ jobid + ","
-					+ "'" + country.replace("'", "''") + "',"
-					+ "'" + municipality.replace("'", "''") + "'," 
-					+ "'" + actstreet.replace("'", "''") + "',"
-					+ street_idlist.get(actstreet) + ","
-					+ "'" + acthousenumber + "',"
-					+ "'" + acthousenumbersorted + "',"
-					+ "'" + acthittype + "',"
-					+ "'" + actosmtype + "',"
-					+ "" + actosmid + ","
-					+ "'" + actosmtag + "',"
-					+ actlonlat
-					+ ");";
-				System.out.println("insert_sql statement ===" + insert_sql + "===");
-
-				try {
-					java.util.Date time_beforeinsert = new java.util.Date();
-					createorupdateStmt.executeUpdate( insert_sql );
-					java.util.Date time_afterinsert = new java.util.Date();
-					System.out.println("TIME for insert record osmhausnummern_hausnummern " + actstreet + " " + acthousenumber + " " + acthittype
-						+ ", in ms. "+(time_afterinsert.getTime()-time_beforeinsert.getTime()));
+				if(actlon == 0.0D) {
+					inserthousenumberWithoutGeometryStmt.setInt(1, countryid);
+					inserthousenumberWithoutGeometryStmt.setInt(2, municipalityid);
+					inserthousenumberWithoutGeometryStmt.setInt(3, jobid);
+					inserthousenumberWithoutGeometryStmt.setString(4,country);
+					inserthousenumberWithoutGeometryStmt.setString(5, municipality);
+					inserthousenumberWithoutGeometryStmt.setString(6, actstreet);
+					inserthousenumberWithoutGeometryStmt.setInt(7, street_idlist.get(actstreet));
+					inserthousenumberWithoutGeometryStmt.setString(8, acthousenumber); 
+					inserthousenumberWithoutGeometryStmt.setString(9, acthousenumbersorted);
+					inserthousenumberWithoutGeometryStmt.setString(10, acthittype);
+					inserthousenumberWithoutGeometryStmt.setString(11, actosmtype);  
+					inserthousenumberWithoutGeometryStmt.setLong(12, actosmid);
+					inserthousenumberWithoutGeometryStmt.setString(13, actosmtag);
+					System.out.println("insert_sql statement ===" + inserthousenumberWithoutGeometrySql + "===");
+					try {
+						java.util.Date time_beforeinsert = new java.util.Date();
+						inserthousenumberWithoutGeometryStmt.executeUpdate();
+						java.util.Date time_afterinsert = new java.util.Date();
+						System.out.println("TIME for insert record osmhausnummern_hausnummern " + actstreet + " " + acthousenumber + " " + acthittype
+							+ ", in ms. "+(time_afterinsert.getTime()-time_beforeinsert.getTime()));
+					}
+					catch( SQLException e) {
+						System.out.println("ERROR: during insert in table osmhausnummern_hausnummern identische, insert code was ===" + inserthousenumberWithoutGeometrySql + "===");
+						e.printStackTrace();
+					}
+				} else {
+					inserthousenumberWithGeometryStmt.setInt(1, countryid);
+					inserthousenumberWithGeometryStmt.setInt(2, municipalityid);
+					inserthousenumberWithGeometryStmt.setInt(3, jobid);
+					inserthousenumberWithGeometryStmt.setString(4,country);
+					inserthousenumberWithGeometryStmt.setString(5, municipality);
+					inserthousenumberWithGeometryStmt.setString(6, actstreet);
+					inserthousenumberWithGeometryStmt.setInt(7, street_idlist.get(actstreet));
+					inserthousenumberWithGeometryStmt.setString(8, acthousenumber); 
+					inserthousenumberWithGeometryStmt.setString(9, acthousenumbersorted);
+					inserthousenumberWithGeometryStmt.setString(10, acthittype);
+					inserthousenumberWithGeometryStmt.setString(11, actosmtype);  
+					inserthousenumberWithGeometryStmt.setLong(12, actosmid);
+					inserthousenumberWithGeometryStmt.setString(13, actosmtag);
+					inserthousenumberWithGeometryStmt.setDouble(14, actlon);
+					inserthousenumberWithGeometryStmt.setDouble(15, actlat);
+					
+					System.out.println("insert_sql statement ===" + inserthousenumberWithGeometrySql + "===");
+					try {
+						java.util.Date time_beforeinsert = new java.util.Date();
+						inserthousenumberWithGeometryStmt.executeUpdate();
+						java.util.Date time_afterinsert = new java.util.Date();
+						System.out.println("TIME for insert record osmhausnummern_hausnummern " + actstreet + " " + acthousenumber + " " + acthittype
+							+ ", in ms. "+(time_afterinsert.getTime()-time_beforeinsert.getTime()));
+					}
+					catch( SQLException e) {
+						System.out.println("ERROR: during insert in table osmhausnummern_hausnummern identische, insert code was ===" + inserthousenumberWithGeometrySql + "===");
+						e.printStackTrace();
+					}
 				}
-				catch( SQLException e) {
-					System.out.println("ERROR: during insert in table osmhausnummern_hausnummern identische, insert code was ===" + insert_sql + "===");
-					e.printStackTrace();
-				}
+
 			} // end of loop over all content lines
+			java.util.Date loopend = new java.util.Date();
+			System.out.println("time for loop in sek: " + (loopend.getTime() - loopstart.getTime())/1000);
+
+			java.util.Date commitstart = new java.util.Date();
 			con_hausnummern.commit();
-			System.out.println("time for insertResultIntoDBinner in sek: " + (new Date().getTime() - insertResultIntoDBinner.getTime())/1000);
+			java.util.Date commitend = new java.util.Date();
+			System.out.println("time for commit in sek: " + (commitend.getTime() - commitstart.getTime())/1000);
+
+			con_hausnummern.close();
+
+			System.out.println("loaded streets from official housenumberlist: " + numberStreetsFromOfficialList);
+			System.out.println("loaded streets dynamically: " + numberStreetsLoadedDynamically);
+			System.out.println("inserted new streets into DB: " + numberStreetInsertedIntoDB);
 
 		} // end of try to connect to DB and operate with DB
 		catch(ClassNotFoundException e) {
