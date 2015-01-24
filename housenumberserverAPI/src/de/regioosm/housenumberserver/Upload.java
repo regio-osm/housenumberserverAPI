@@ -23,6 +23,7 @@ import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Timestamp;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.*;
@@ -102,16 +103,18 @@ public class Upload extends HttpServlet {
      * @param municipality: municipality part of identification of result file.
      * @return: errors in string format
      */
-    private String insertResultIntoDB(String content, String country, String municipality) {
+    private String insertResultIntoDB(String content, String uploadcountry, String uploadmunicipality, String uploadjobname) {
 		java.util.Date insertResultIntoDBouter = new java.util.Date();
 		java.util.Date insertResultIntoDBinner = new java.util.Date();
+
+		java.util.Date evaluationtime = null;
+		java.util.Date osmtime = null;
 
 		if(content.length() == 0) {
 			System.out.println("leerer Content, Abbruch");
 			return "leer Content, Abbruch";
 		}
 
-		
 		try {
 			Class.forName("org.postgresql.Driver");
 	
@@ -120,78 +123,53 @@ public class Upload extends HttpServlet {
 
 			System.out.println("beginn von insertfkt");
 			
-			String select_sql = "SELECT land.id AS countryid, stadt.id AS municipalityid, jobs.id AS jobid"
+			String select_sql = "SELECT land.id AS countryid, land,"
+				+ " stadt.id AS municipalityid, stadt,"
+				+ " ST_AsText(polygon) AS polygon_astext, ST_SRID(polygon) AS polygon_srid,"
+				+ " jobs.id AS jobid, jobname"
 				+ " FROM land, stadt, gebiete, jobs WHERE"
 				+ " land = ?"
 				+ " AND stadt = ?"
+				+ " AND jobname = ?"
 				+ " AND gebiete.stadt_id = stadt.id"
 				+ " AND jobs.gebiete_id = gebiete.id"
-				+ " AND stadt = jobname"
 				+ " ORDER BY admin_level;";
 
 			PreparedStatement selectqueryStmt = con_hausnummern.prepareStatement(select_sql);
-			selectqueryStmt.setString(1, country);
-			selectqueryStmt.setString(2, municipality);
+			selectqueryStmt.setString(1, uploadcountry);
+			selectqueryStmt.setString(2, uploadmunicipality);
+			selectqueryStmt.setString(3, uploadjobname);
 			ResultSet existingmunicipalityRS = selectqueryStmt.executeQuery();
-
-			
-			String deletelastevaluationSql = "DELETE FROM auswertung_hausnummern"
-					+ " WHERE land_id = ? AND stadt_id = ? AND job_id = ?;";
-			PreparedStatement deletelastevaluationStmt = con_hausnummern.prepareStatement(deletelastevaluationSql);
-			
-			String selectstreetid_sql = "SELECT id FROM strasse where strasse = ?;";
-			PreparedStatement selectstreetidstmt = con_hausnummern.prepareStatement(selectstreetid_sql);
-
-			String selectallofficialstreetsSql = "SELECT DISTINCT ON (strasse) strasse, strasse.id AS id"
-				+ " FROM stadt_hausnummern, strasse, stadt, land"
-				+ " WHERE stadt_hausnummern.strasse_id = strasse.id"
-				+ " AND stadt_hausnummern.stadt_id = stadt.id"
-				+ " AND stadt_hausnummern.land_id = land.id"
-				+ " AND stadt = ? AND land = ?;";
-			PreparedStatement selectallofficialstreetsStmt = con_hausnummern.prepareStatement(selectallofficialstreetsSql);
-			
-			String insertstreetsql = "INSERT INTO strasse (strasse) VALUES (?) returning id;";
-			PreparedStatement insertstreetstmt = con_hausnummern.prepareStatement(insertstreetsql);
-			
-			String inserthousenumberWithGeometrySql = "INSERT INTO auswertung_hausnummern"
-					+ " (land_id, stadt_id, job_id, copyland, copystadt, copystrasse,"
-					+ " strasse_id, hausnummer, hausnummer_sortierbar, treffertyp,"
-					+ " osm_objektart, osm_id, objektart, point"
-					+ ")"
-					+ " VALUES(?, ?, ?, ?, ?, ?,"
-					+ " ?, ?, ?, ?,"
-					+ " ?, ?, ?, ST_Setsrid(ST_Makepoint(?, ?), 4326));";
-			PreparedStatement inserthousenumberWithGeometryStmt = con_hausnummern.prepareStatement(inserthousenumberWithGeometrySql);
-
-			String inserthousenumberWithoutGeometrySql = "INSERT INTO auswertung_hausnummern"
-					+ " (land_id, stadt_id, job_id, copyland, copystadt, copystrasse,"
-					+ " strasse_id, hausnummer, hausnummer_sortierbar, treffertyp,"
-					+ " osm_objektart, osm_id, objektart"
-					+ ")"
-					+ " VALUES(?, ?, ?, ?, ?, ?,"
-					+ " ?, ?, ?, ?,"
-					+ " ?, ?, ?);";
-			PreparedStatement inserthousenumberWithoutGeometryStmt = con_hausnummern.prepareStatement(inserthousenumberWithoutGeometrySql);
 
 
 			int countryid = 0;
+			String country = "";
 			int municipalityid = 0;
+			String municipality = "";
 			int jobid = 0;
+			String jobname = "";
 
 					//TODO check and code, what happens with more than one row
 			if (existingmunicipalityRS.next()) {
 				countryid = existingmunicipalityRS.getInt("countryid");
+				country = existingmunicipalityRS.getString("land");
 				municipalityid = existingmunicipalityRS.getInt("municipalityid");
+				municipality = existingmunicipalityRS.getString("stadt");
 				jobid = existingmunicipalityRS.getInt("jobid");
+				jobname = existingmunicipalityRS.getString("jobname");
 			} else {
+				selectqueryStmt.close();
 				return "Error: There is no matching municipality '" + municipality + "' within the country '" + country + "' in the server side housenumber database. The uploaded result will be suspended";
 			}
 			
+			System.out.println("related DB job: id # " + jobid + "    jobname ===" + jobname + "===   in  " + municipality + ", " + country);
 
 				// delete up to now active evaluation for same municipality
 				// It will be checked against jobname = municipality name to only delete complete municipality evaluation, 
 				// not optionally available subadmin evaluations
-			System.out.println("deleteauswertunghausnummern statement ===" + deletelastevaluationSql + "===");
+			String deletelastevaluationSql = "DELETE FROM auswertung_hausnummern"
+				+ " WHERE land_id = ? AND stadt_id = ? AND job_id = ?;";
+			PreparedStatement deletelastevaluationStmt = con_hausnummern.prepareStatement(deletelastevaluationSql);
 			try {
 				deletelastevaluationStmt.setInt(1, countryid);
 				deletelastevaluationStmt.setInt(2, municipalityid);
@@ -202,11 +180,20 @@ public class Upload extends HttpServlet {
 				System.out.println("ERROR, when tried to delete rows for old evaluation, but import will continue");
 				e.printStackTrace();
 			}
+			deletelastevaluationStmt.close();
 
 				// storage of streetnames and their internal DB id. If a street is missing in DB, it will be inserted,
 				// before the insert of the housenumbers at the streets will be inserted
 			HashMap<String, Integer> street_idlist = new HashMap<String, Integer>();
 
+			String selectallofficialstreetsSql = "SELECT DISTINCT ON (strasse) strasse, strasse.id AS id"
+				+ " FROM stadt_hausnummern, strasse, stadt, land"
+				+ " WHERE stadt_hausnummern.strasse_id = strasse.id"
+				+ " AND stadt_hausnummern.stadt_id = stadt.id"
+				+ " AND stadt_hausnummern.land_id = land.id"
+				+ " AND stadt = ? AND land = ?;";
+			PreparedStatement selectallofficialstreetsStmt = con_hausnummern.prepareStatement(selectallofficialstreetsSql);
+			
 			int numberStreetsFromOfficialList = 0;
 			int numberStreetsLoadedDynamically = 0;
 			int numberStreetInsertedIntoDB = 0;
@@ -223,8 +210,36 @@ public class Upload extends HttpServlet {
 				System.out.println("ERROR, when tried to get all official street names from municipality ===" + municipality + "=== in country ===" + country + "===");
 				e.printStackTrace();
 			}
+			selectallofficialstreetsStmt.close();
+			
 
+			String selectStreetidSql = "SELECT id FROM strasse where strasse = ?;";
+			PreparedStatement selectStreetidStmt = con_hausnummern.prepareStatement(selectStreetidSql);
 
+			String insertstreetsql = "INSERT INTO strasse (strasse) VALUES (?) returning id;";
+			PreparedStatement insertstreetstmt = con_hausnummern.prepareStatement(insertstreetsql);
+
+			String inserthousenumberWithGeometrySql = "INSERT INTO auswertung_hausnummern"
+				+ " (land_id, stadt_id, job_id, copyland, copystadt, copystrasse,"
+				+ " strasse_id, hausnummer, hausnummer_sortierbar, treffertyp,"
+				+ " osm_objektart, osm_id, objektart, point"
+				+ ")"
+				+ " VALUES(?, ?, ?, ?, ?, ?,"
+				+ " ?, ?, ?, ?,"
+				+ " ?, ?, ?, ST_Setsrid(ST_Makepoint(?, ?), 4326));";
+			PreparedStatement inserthousenumberWithGeometryStmt = con_hausnummern.prepareStatement(inserthousenumberWithGeometrySql);
+
+			String inserthousenumberWithoutGeometrySql = "INSERT INTO auswertung_hausnummern"
+				+ " (land_id, stadt_id, job_id, copyland, copystadt, copystrasse,"
+				+ " strasse_id, hausnummer, hausnummer_sortierbar, treffertyp,"
+				+ " osm_objektart, osm_id, objektart"
+				+ ")"
+				+ " VALUES(?, ?, ?, ?, ?, ?,"
+				+ " ?, ?, ?, ?,"
+				+ " ?, ?, ?);";
+			PreparedStatement inserthousenumberWithoutGeometryStmt = con_hausnummern.prepareStatement(inserthousenumberWithoutGeometrySql);
+
+			
 				// change to transaction mode
 			con_hausnummern.setAutoCommit(false);
 
@@ -233,6 +248,9 @@ public class Upload extends HttpServlet {
 			String lines[] = content.split("\n");
 
 				// loop over all result file lines
+			int countHousenumbersIdentical = 0;
+			int countHousenumbersListonly = 0;
+			int countHousenumbersOsmonly = 0;
 			java.util.Date loopstart = new java.util.Date();
 			for(int lineindex = 0; lineindex < lines.length; lineindex++) {
 				String actline = lines[lineindex];
@@ -247,13 +265,27 @@ public class Upload extends HttpServlet {
 						if(actcolumn == "")
 							continue;
 						headerfield.put(colindex, actcolumn);
-						System.out.println("stored headerfield[" + colindex + "] ===" + actcolumn + "===");
+						//System.out.println("stored headerfield[" + colindex + "] ===" + actcolumn + "===");
 					}
 					continue;
 				}
 					// ignore other comment lines
-				if(actline.indexOf("#") == 0)
+				if(actline.indexOf("#") == 0) {
+					if(actline.indexOf("#Para ") == 0) {
+						System.out.println("Info: found comment line with parameter ...");
+						String keyvalue[] = actline.substring(6).split("=");
+						String key = keyvalue[0];
+						String value = keyvalue[1];
+
+						if(key.equals("OSMTime")) {
+							osmtime = new java.util.Date(Long.parseLong(value));
+						}
+						if(key.equals("EvaluationTime")) {
+							evaluationtime = new java.util.Date(Long.parseLong(value));
+						}
+					}
 					continue;
+				}
 				String columns[] = actline.split("\t");
 				if(columns.length < 6) {
 					System.out.println("Error: file line contains to less columns, will be ignored. line no.: " + lineindex + "  line content ===" + actline + "===");
@@ -266,40 +298,40 @@ public class Upload extends HttpServlet {
 					if(actcolumn == "")
 						continue;
 					field.put(headerfield.get(colindex), actcolumn);
-					System.out.println("stored field[" + headerfield.get(colindex) + "] ===" + actcolumn + "===");
+					//System.out.println("stored field[" + headerfield.get(colindex) + "] ===" + actcolumn + "===");
 				}
 
 				String actstreet = "";
 				if(field.get("strasse") != null)
 					actstreet = field.get("strasse");
-				System.out.println("actstreet ===" + actstreet + "===");
+				//System.out.println("actstreet ===" + actstreet + "===");
 
 				String acthousenumber = "";
 				if(field.get("hausnummer") != null)
 					acthousenumber = field.get("hausnummer");
-				System.out.println("acthousenumber ===" + acthousenumber + "===");
+				//System.out.println("acthousenumber ===" + acthousenumber + "===");
 				String acthousenumbersorted = setHausnummerNormalisiert(acthousenumber);
-				System.out.println("acthousenumbersorted ===" + acthousenumbersorted + "===");
+				//System.out.println("acthousenumbersorted ===" + acthousenumbersorted + "===");
 
 				String acthittype = "";
 				if(field.get("treffertyp") != null)
 					acthittype = field.get("treffertyp");
-				System.out.println("acthittype ===" + acthittype + "===");
+				//System.out.println("acthittype ===" + acthittype + "===");
 
 				String actosmtag = "";	// OSM "key"=>"value" of the osm object, which holds the housenumber
 				if(field.get("osmtag") != null)
 					actosmtag = field.get("osmtag");
-				System.out.println("actosmtag ===" + actosmtag + "===");
+				//System.out.println("actosmtag ===" + actosmtag + "===");
 
 				String actosmtype = "";	// will be "node", "way" or "relation"
 				if(field.get("osmtyp") != null)
 					actosmtype = field.get("osmtyp");
-				System.out.println("actosmtype ===" + actosmtype + "===");
+				//System.out.println("actosmtype ===" + actosmtype + "===");
 
 				Long actosmid = -1L;	// OSM id of the osm objects, which holds the housenumber. It must be used in conjunction with actosmtype
 				if(field.get("osmid") != null)
 					actosmid = Long.parseLong(field.get("osmid"));
-				System.out.println("actosmid ===" + actosmid + "===");
+				//System.out.println("actosmid ===" + actosmid + "===");
 
 				double actlon = 0.0D;
 				double actlat = 0.0D;
@@ -311,18 +343,28 @@ public class Upload extends HttpServlet {
 					inserthousenumberWithGeometryStmt.setDouble(9, 50.1);
 
 				}
-				System.out.println("actlon ===" + actlon + "===    actlat ===" + actlat + "===");
+				//System.out.println("actlon ===" + actlon + "===    actlat ===" + actlat + "===");
+
+				if(acthittype.equals("i"))
+					countHousenumbersIdentical++;
+				else if(acthittype.equals("l"))
+					countHousenumbersListonly++;
+				else if(acthittype.equals("o"))
+					countHousenumbersOsmonly++;
+				else
+					System.out.println("ERROR, acthittype unknown ===" + acthittype + "=== in result file lineno " 
+						+ (lineindex + 1) + ", fileline content was ===" + actline + "===");
 
 				if(! street_idlist.containsKey(actstreet)) {
-					selectstreetidstmt.setString(1, actstreet);
+					selectStreetidStmt.setString(1, actstreet);
 					System.out.println("query for street ===" + actstreet + "=== ...");
-					ResultSet selstreetRS = selectstreetidstmt.executeQuery();
+					ResultSet selstreetRS = selectStreetidStmt.executeQuery();
 					if (selstreetRS.next()) {
 						street_idlist.put(actstreet, selstreetRS.getInt("id"));
 						numberStreetsLoadedDynamically++;
 					} else {
 						insertstreetstmt.setString(1, actstreet);
-						System.out.println("insert_sql statement ===" + insertstreetsql + "===");
+						//System.out.println("insert_sql statement ===" + insertstreetsql + "===");
 						try {
 							ResultSet rs_getautogenkeys = insertstreetstmt.executeQuery();
 						    if (rs_getautogenkeys.next()) {
@@ -351,16 +393,16 @@ public class Upload extends HttpServlet {
 					inserthousenumberWithoutGeometryStmt.setString(11, actosmtype);  
 					inserthousenumberWithoutGeometryStmt.setLong(12, actosmid);
 					inserthousenumberWithoutGeometryStmt.setString(13, actosmtag);
-					System.out.println("insert_sql statement ===" + inserthousenumberWithoutGeometrySql + "===");
+					//System.out.println("insert_sql statement ===" + inserthousenumberWithoutGeometrySql + "===");
 					try {
 						java.util.Date time_beforeinsert = new java.util.Date();
 						inserthousenumberWithoutGeometryStmt.executeUpdate();
 						java.util.Date time_afterinsert = new java.util.Date();
-						System.out.println("TIME for insert record osmhausnummern_hausnummern " + actstreet + " " + acthousenumber + " " + acthittype
-							+ ", in ms. "+(time_afterinsert.getTime()-time_beforeinsert.getTime()));
+						//System.out.println("TIME for insert record osmhausnummern_hausnummern " + actstreet + " " + acthousenumber + " " + acthittype
+						//	+ ", in ms. "+(time_afterinsert.getTime()-time_beforeinsert.getTime()));
 					}
 					catch( SQLException e) {
-						System.out.println("ERROR: during insert in table osmhausnummern_hausnummern identische, insert code was ===" + inserthousenumberWithoutGeometrySql + "===");
+						System.out.println("ERROR: during insert in table auswertung_hausnummern, insert code was ===" + inserthousenumberWithoutGeometrySql + "===");
 						e.printStackTrace();
 					}
 				} else {
@@ -380,16 +422,16 @@ public class Upload extends HttpServlet {
 					inserthousenumberWithGeometryStmt.setDouble(14, actlon);
 					inserthousenumberWithGeometryStmt.setDouble(15, actlat);
 					
-					System.out.println("insert_sql statement ===" + inserthousenumberWithGeometrySql + "===");
+					//System.out.println("insert_sql statement ===" + inserthousenumberWithGeometrySql + "===");
 					try {
 						java.util.Date time_beforeinsert = new java.util.Date();
 						inserthousenumberWithGeometryStmt.executeUpdate();
 						java.util.Date time_afterinsert = new java.util.Date();
-						System.out.println("TIME for insert record osmhausnummern_hausnummern " + actstreet + " " + acthousenumber + " " + acthittype
-							+ ", in ms. "+(time_afterinsert.getTime()-time_beforeinsert.getTime()));
+						//System.out.println("TIME for insert record osmhausnummern_hausnummern " + actstreet + " " + acthousenumber + " " + acthittype
+						//	+ ", in ms. "+(time_afterinsert.getTime()-time_beforeinsert.getTime()));
 					}
 					catch( SQLException e) {
-						System.out.println("ERROR: during insert in table osmhausnummern_hausnummern identische, insert code was ===" + inserthousenumberWithGeometrySql + "===");
+						System.out.println("ERROR: during insert in table auswertung_hausnummern, insert code was ===" + inserthousenumberWithGeometrySql + "===");
 						e.printStackTrace();
 					}
 				}
@@ -398,10 +440,109 @@ public class Upload extends HttpServlet {
 			java.util.Date loopend = new java.util.Date();
 			System.out.println("time for loop in sek: " + (loopend.getTime() - loopstart.getTime())/1000);
 
+			selectStreetidStmt.close();
+			inserthousenumberWithGeometryStmt.close();
+			inserthousenumberWithoutGeometryStmt.close();
+
+			float resultpercentfulfilled = 0.0F;
+			if((countHousenumbersListonly  + countHousenumbersIdentical) != 0)
+				resultpercentfulfilled = (float) (100.0 * countHousenumbersIdentical / (countHousenumbersListonly  + countHousenumbersIdentical));
+
+			String insertEvaluationResultSql = "INSERT INTO evaluations (land_id, stadt_id, job_id,"
+				+ " number_target, number_identical, number_osmonly,"
+				+ " tstamp, osmdb_tstamp)"
+				+ " VALUES (?, ?, ?, ?, ?, ?, ?, ?);";
+			PreparedStatement insertEvaluationResultStmt = con_hausnummern.prepareStatement(insertEvaluationResultSql);
+
+				// store result of actual job evaluation in evaluations overview table, including timestamps for evalation time and time of local osm db 
+			insertEvaluationResultStmt.setInt(1, countryid);
+			insertEvaluationResultStmt.setInt(2, municipalityid);
+			insertEvaluationResultStmt.setInt(3, jobid);
+			insertEvaluationResultStmt.setInt(4, (countHousenumbersListonly + countHousenumbersIdentical));
+			insertEvaluationResultStmt.setInt(5, countHousenumbersIdentical);
+			insertEvaluationResultStmt.setInt(6, countHousenumbersOsmonly);
+			insertEvaluationResultStmt.setTimestamp(7, new Timestamp(evaluationtime.getTime()), Calendar.getInstance(TimeZone.getTimeZone("UTC")));
+			insertEvaluationResultStmt.setTimestamp(8, new Timestamp(osmtime.getTime()), Calendar.getInstance(TimeZone.getTimeZone("UTC")));
+			//System.out.println("insert evaluation result statement ===" + insertEvaluationResultSql + "===");
+			try {
+				java.util.Date time_beforeinsert = new java.util.Date();
+				insertEvaluationResultStmt.executeUpdate();
+				java.util.Date time_afterinsert = new java.util.Date();
+				System.out.println("TIME for insert evaluation result DB action in ms. "+(time_afterinsert.getTime()-time_beforeinsert.getTime()));
+			}
+			catch( SQLException e) {
+				System.out.println("ERROR: during insert in table osmhausnummern_hausnummern identische, insert code was ===" + insertEvaluationResultSql + "===");
+				e.printStackTrace();
+			}
+			insertEvaluationResultStmt.close();
+
+			String EvaluationResultMapSql = "SELECT id FROM exportjobs2shape"
+				+ " WHERE land_id = ? AND stadt_id = ? AND job_id = ?;";
+			PreparedStatement selectEvaluationResultMapStmt = con_hausnummern.prepareStatement(EvaluationResultMapSql);
+			
+				// store result of actual job evaluation in evaluations overview table for Map, including timestamps for evalation time and time of local osm db 
+			try {
+				selectEvaluationResultMapStmt.setInt(1, countryid);
+				selectEvaluationResultMapStmt.setInt(2, municipalityid);
+				selectEvaluationResultMapStmt.setInt(3, jobid);
+				//System.out.println("select evaluation result map statement ===" + EvaluationResultMapSql + "===");
+				java.util.Date time_beforeinsert = new java.util.Date();
+				ResultSet selectEvaluationResultMapRs = selectEvaluationResultMapStmt.executeQuery();
+				if(selectEvaluationResultMapRs.next()) {
+					EvaluationResultMapSql = "UPDATE exportjobs2shape"
+						+ " SET stadtbezrk = ?, hnr_soll = ?, hnr_osm = ?,"
+						+ " hnr_fhlosm = ?, hnr_nurosm = ?, hnr_abdeck = ?,"
+						+ " polygon = ST_Transform(ST_Geomfromtext(?, ?), 4326)"
+						+ " WHERE land_id = ? AND stadt_id = ? AND job_id = ?;";
+					PreparedStatement updateEvaluationResultMapStmt = con_hausnummern.prepareStatement(EvaluationResultMapSql);
+					updateEvaluationResultMapStmt.setString(1, jobname);
+					updateEvaluationResultMapStmt.setInt(2, (countHousenumbersListonly + countHousenumbersIdentical));
+					updateEvaluationResultMapStmt.setInt(3, countHousenumbersIdentical);
+					updateEvaluationResultMapStmt.setInt(4, countHousenumbersListonly);
+					updateEvaluationResultMapStmt.setInt(5, countHousenumbersOsmonly);
+					updateEvaluationResultMapStmt.setInt(6, (int)(Math.round(resultpercentfulfilled * 10.0) / 10.0));
+					updateEvaluationResultMapStmt.setString(7, existingmunicipalityRS.getString("polygon_astext"));
+					updateEvaluationResultMapStmt.setInt(8, existingmunicipalityRS.getInt("polygon_srid"));
+					updateEvaluationResultMapStmt.setInt(9, countryid);
+					updateEvaluationResultMapStmt.setInt(10, municipalityid);
+					updateEvaluationResultMapStmt.setInt(11, jobid);
+					updateEvaluationResultMapStmt.executeUpdate();
+					updateEvaluationResultMapStmt.close();
+				} else {
+					EvaluationResultMapSql = "INSERT INTO exportjobs2shape"
+						+ " (land_id, stadt_id, job_id, stadtbezrk, hnr_soll, hnr_osm,"
+						+ " hnr_fhlosm, hnr_nurosm,hnr_abdeck,polygon)"
+						+ " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ST_Transform(ST_Geomfromtext(?, ?), 4326));";
+					PreparedStatement insertEvaluationResultMapStmt = con_hausnummern.prepareStatement(EvaluationResultMapSql);
+					insertEvaluationResultMapStmt.setInt(1, countryid);
+					insertEvaluationResultMapStmt.setInt(2, municipalityid);
+					insertEvaluationResultMapStmt.setInt(3, jobid);
+					insertEvaluationResultMapStmt.setString(4, jobname);
+					insertEvaluationResultMapStmt.setInt(5, (countHousenumbersListonly + countHousenumbersIdentical));
+					insertEvaluationResultMapStmt.setInt(6, countHousenumbersIdentical);
+					insertEvaluationResultMapStmt.setInt(7, countHousenumbersListonly);
+					insertEvaluationResultMapStmt.setInt(8, countHousenumbersOsmonly);
+					insertEvaluationResultMapStmt.setInt(9, (int)(Math.round(resultpercentfulfilled * 10.0) / 10.0));
+					insertEvaluationResultMapStmt.setString(10, existingmunicipalityRS.getString("polygon_astext"));
+					insertEvaluationResultMapStmt.setInt(11, existingmunicipalityRS.getInt("polygon_srid"));
+					insertEvaluationResultMapStmt.executeUpdate();
+					insertEvaluationResultMapStmt.close();
+				}
+				selectEvaluationResultMapStmt.close();
+				java.util.Date time_afterinsert = new java.util.Date();
+				System.out.println("TIME for insert or update of evaluation result map DB action in ms. "+(time_afterinsert.getTime()-time_beforeinsert.getTime()));
+			}
+			catch( SQLException e) {
+				System.out.println("ERROR: during select result overview map entry, select code was ===" + EvaluationResultMapSql + "===");
+				e.printStackTrace();
+			}
+
 			java.util.Date commitstart = new java.util.Date();
 			con_hausnummern.commit();
 			java.util.Date commitend = new java.util.Date();
 			System.out.println("time for commit in sek: " + (commitend.getTime() - commitstart.getTime())/1000);
+
+			selectqueryStmt.close();
 
 			con_hausnummern.close();
 
@@ -425,7 +566,7 @@ public class Upload extends HttpServlet {
 			return e.toString();
 		}
 		System.out.println("time for insertResultIntoDBouter in sek: " + (new Date().getTime() - insertResultIntoDBouter.getTime())/1000);
-		return "ganz am ende der sub-fkt. unerwartet";
+		return "Ende der sub-fkt. insertResultIntoDB";
 	}
     
 	/**
@@ -459,6 +600,7 @@ public class Upload extends HttpServlet {
 
 			String country = map.getParameter("country");
 			String municipality = map.getParameter("municipality");
+			String jobname = map.getParameter("jobname");
 			File file = map.getFile("result");
 			System.out.println("temporary file ===" + file.getAbsoluteFile() + "===");
 
@@ -473,13 +615,18 @@ public class Upload extends HttpServlet {
 			String content = filecontent.toString();
 
 			// Now do your thing with the obtained input.
-			System.out.println(" country ===" + country + "===");
+			System.out.println(" country      ===" + country + "===");
 			System.out.println(" municipality ===" + municipality + "===");
+			System.out.println(" jobname      ===" + jobname + "===");
 			System.out.println(" content length ===" + content.length() + "===");
 
+
+				// output Character Encoding MUST BE SET previously to response.getWriter to work !!!
+			response.setContentType("text/html; charset=utf-8");
+			response.setHeader("Content-Encoding", "UTF-8");
+			
 			PrintWriter writer = response.getWriter();
 
-			response.setContentType("text/html; charset=utf-8");
 
 			writer.println("<html>");
 			writer.println("<head><meta charset=\"utf-8\"><title>doPost aktiv</title></head>");
@@ -518,6 +665,12 @@ public class Upload extends HttpServlet {
 			uploadOutput.println(content);
 			uploadOutput.close();
 
+				// at 2015-01-20, inserted here to send the response to the client
+				//			AFTER the result file has been imported into the DB,
+				//			because otherwise, not all imports are successfully
+			System.out.println(" Sub-fkt insertResultIntoDB wird aufgerufen ...");
+			System.out.println(insertResultIntoDB(content, country, municipality, jobname));
+			System.out.println(" Sub-fkt insertResultIntoDB ist fertig");
 
 			writer.println(" country ===" + country + "===");
 			writer.println(" municipality ===" + municipality + "===");
@@ -531,12 +684,8 @@ public class Upload extends HttpServlet {
 			System.out.println("request.getCharacterEncoding() ===" + request.getCharacterEncoding() + "===");
 			System.out.println(" country ===" + country + "===");
 			System.out.println(" municipality ===" + municipality + "===");
+			System.out.println(" jobname ===" + jobname + "===");
 
-			System.out.println(" Sub-fkt insertResultIntoDB wird aufgerufen ...");
-			//writer.println("output von sub-fkt <<<");
-			System.out.println(insertResultIntoDB(content, country, municipality));
-			//writer.println(">>> output von sub-fkt");
-			System.out.println(" Sub-fkt insertResultIntoDB ist fertig");
 		} catch (IOException ioerror) {
 			System.out.println("ERORR: IOException happened, details follows ...");
 			System.out.println(" .. couldn't open file to write, filename was ===" + filename + "===");
