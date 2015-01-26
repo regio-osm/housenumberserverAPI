@@ -89,26 +89,31 @@ public class findjobs extends HttpServlet {
 
 			String country = map.getParameter("country");
 			String municipality = map.getParameter("municipality");
+			if((municipality == null) || municipality.equals(""))
+				municipality = "*";
+			String jobname = map.getParameter("jobname");
+			if((jobname == null) || jobname.equals(""))
+				jobname = "*";
 			String officialkeys = map.getParameter("officialkeys");
+			if((officialkeys == null) || officialkeys.equals(""))
+				officialkeys = "*";
 
 			// Now do your thing with the obtained input.
 			System.out.println("=== original input parameters ===");
 			System.out.println(" country      ===" + country + "===");
 			System.out.println(" municipality ===" + municipality + "===");
+			System.out.println(" jobname ===" + jobname + "===");
 			System.out.println(" officialkeys ===" + officialkeys + "===");
 
 			country = country.replace("*", "%");
 			municipality = municipality.replace("*", "%");
+			jobname = jobname.replace("*", "%");
 			officialkeys = officialkeys.replace("*", "%");
-			
-			if(municipality.equals(""))
-				municipality = "%";
-			if(officialkeys.equals(""))
-				officialkeys = "%";
 
 			System.out.println("=== changed input parameters for db ===");
 			System.out.println(" country      ===" + country + "===");
 			System.out.println(" municipality ===" + municipality + "===");
+			System.out.println(" jobname ===" + jobname + "===");
 			System.out.println(" officialkeys ===" + officialkeys + "===");
 
 			Class.forName("org.postgresql.Driver");
@@ -118,19 +123,23 @@ public class findjobs extends HttpServlet {
 
 			String select_sql = "SELECT land.id AS countryid, land,"
 				+ " stadt.id AS municipalityid, stadt,"
-				+ " jobs.id AS jobid, jobname, osm_id"
+				+ " jobs.id AS jobid, jobname, osm_id, sub_id"
 				+ " FROM land, stadt, gebiete, jobs WHERE"
-				+ " land ilike ?"
+				+ " officialkeys_id ilike ?"
 				+ " AND stadt ilike ?"
-				+ " AND officialkeys_id ilike ?"
+				+ " AND land ilike ?"
+				+ " AND jobname ilike ?"
+				+ " AND stadt.land_id = land.id"
 				+ " AND gebiete.stadt_id = stadt.id"
 				+ " AND jobs.gebiete_id = gebiete.id"
 				+ " ORDER BY land, stadt, jobname;";
 
+			System.out.println("SQL-Query to find requested jobs for client ===" + select_sql + "===");
 			PreparedStatement selectqueryStmt = con_hausnummern.prepareStatement(select_sql);
-			selectqueryStmt.setString(1, country);
+			selectqueryStmt.setString(1, officialkeys);
 			selectqueryStmt.setString(2, municipality);
-			selectqueryStmt.setString(3, officialkeys);
+			selectqueryStmt.setString(3, country);
+			selectqueryStmt.setString(4, jobname);
 			ResultSet existingmunicipalityRS = selectqueryStmt.executeQuery();
 
 			StringBuffer dataoutput = new StringBuffer();
@@ -144,9 +153,11 @@ public class findjobs extends HttpServlet {
 				actoutputline = existingmunicipalityRS.getString("land") + "\t"
 					+ existingmunicipalityRS.getString("stadt") + "\t"
 					+ existingmunicipalityRS.getString("jobname") + "\t"
+					+ existingmunicipalityRS.getString("sub_id") + "\t"
 					+ osm_id + "\n";
 				dataoutput.append(actoutputline);
 			}
+			System.out.println("result content ===" + dataoutput.toString() + "===");
 
 			selectqueryStmt.close();
 			con_hausnummern.close();

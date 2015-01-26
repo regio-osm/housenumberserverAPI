@@ -220,21 +220,21 @@ public class Upload extends HttpServlet {
 			PreparedStatement insertstreetstmt = con_hausnummern.prepareStatement(insertstreetsql);
 
 			String inserthousenumberWithGeometrySql = "INSERT INTO auswertung_hausnummern"
-				+ " (land_id, stadt_id, job_id, copyland, copystadt, copystrasse,"
+				+ " (land_id, stadt_id, job_id, copyland, copystadt, copyjobname, copystrasse,"
 				+ " strasse_id, hausnummer, hausnummer_sortierbar, treffertyp,"
 				+ " osm_objektart, osm_id, objektart, point"
 				+ ")"
-				+ " VALUES(?, ?, ?, ?, ?, ?,"
+				+ " VALUES(?, ?, ?, ?, ?, ?, ?,"
 				+ " ?, ?, ?, ?,"
 				+ " ?, ?, ?, ST_Setsrid(ST_Makepoint(?, ?), 4326));";
 			PreparedStatement inserthousenumberWithGeometryStmt = con_hausnummern.prepareStatement(inserthousenumberWithGeometrySql);
 
 			String inserthousenumberWithoutGeometrySql = "INSERT INTO auswertung_hausnummern"
-				+ " (land_id, stadt_id, job_id, copyland, copystadt, copystrasse,"
+				+ " (land_id, stadt_id, job_id, copyland, copystadt, copyjobname, copystrasse,"
 				+ " strasse_id, hausnummer, hausnummer_sortierbar, treffertyp,"
 				+ " osm_objektart, osm_id, objektart"
 				+ ")"
-				+ " VALUES(?, ?, ?, ?, ?, ?,"
+				+ " VALUES(?, ?, ?, ?, ?, ?, ?,"
 				+ " ?, ?, ?, ?,"
 				+ " ?, ?, ?);";
 			PreparedStatement inserthousenumberWithoutGeometryStmt = con_hausnummern.prepareStatement(inserthousenumberWithoutGeometrySql);
@@ -385,14 +385,15 @@ public class Upload extends HttpServlet {
 					inserthousenumberWithoutGeometryStmt.setInt(3, jobid);
 					inserthousenumberWithoutGeometryStmt.setString(4,country);
 					inserthousenumberWithoutGeometryStmt.setString(5, municipality);
-					inserthousenumberWithoutGeometryStmt.setString(6, actstreet);
-					inserthousenumberWithoutGeometryStmt.setInt(7, street_idlist.get(actstreet));
-					inserthousenumberWithoutGeometryStmt.setString(8, acthousenumber); 
-					inserthousenumberWithoutGeometryStmt.setString(9, acthousenumbersorted);
-					inserthousenumberWithoutGeometryStmt.setString(10, acthittype);
-					inserthousenumberWithoutGeometryStmt.setString(11, actosmtype);  
-					inserthousenumberWithoutGeometryStmt.setLong(12, actosmid);
-					inserthousenumberWithoutGeometryStmt.setString(13, actosmtag);
+					inserthousenumberWithoutGeometryStmt.setString(6, jobname);
+					inserthousenumberWithoutGeometryStmt.setString(7, actstreet);
+					inserthousenumberWithoutGeometryStmt.setInt(8, street_idlist.get(actstreet));
+					inserthousenumberWithoutGeometryStmt.setString(9, acthousenumber); 
+					inserthousenumberWithoutGeometryStmt.setString(10, acthousenumbersorted);
+					inserthousenumberWithoutGeometryStmt.setString(11, acthittype);
+					inserthousenumberWithoutGeometryStmt.setString(12, actosmtype);  
+					inserthousenumberWithoutGeometryStmt.setLong(13, actosmid);
+					inserthousenumberWithoutGeometryStmt.setString(14, actosmtag);
 					//System.out.println("insert_sql statement ===" + inserthousenumberWithoutGeometrySql + "===");
 					try {
 						java.util.Date time_beforeinsert = new java.util.Date();
@@ -411,16 +412,17 @@ public class Upload extends HttpServlet {
 					inserthousenumberWithGeometryStmt.setInt(3, jobid);
 					inserthousenumberWithGeometryStmt.setString(4,country);
 					inserthousenumberWithGeometryStmt.setString(5, municipality);
-					inserthousenumberWithGeometryStmt.setString(6, actstreet);
-					inserthousenumberWithGeometryStmt.setInt(7, street_idlist.get(actstreet));
-					inserthousenumberWithGeometryStmt.setString(8, acthousenumber); 
-					inserthousenumberWithGeometryStmt.setString(9, acthousenumbersorted);
-					inserthousenumberWithGeometryStmt.setString(10, acthittype);
-					inserthousenumberWithGeometryStmt.setString(11, actosmtype);  
-					inserthousenumberWithGeometryStmt.setLong(12, actosmid);
-					inserthousenumberWithGeometryStmt.setString(13, actosmtag);
-					inserthousenumberWithGeometryStmt.setDouble(14, actlon);
-					inserthousenumberWithGeometryStmt.setDouble(15, actlat);
+					inserthousenumberWithGeometryStmt.setString(6, jobname);
+					inserthousenumberWithGeometryStmt.setString(7, actstreet);
+					inserthousenumberWithGeometryStmt.setInt(8, street_idlist.get(actstreet));
+					inserthousenumberWithGeometryStmt.setString(9, acthousenumber); 
+					inserthousenumberWithGeometryStmt.setString(10, acthousenumbersorted);
+					inserthousenumberWithGeometryStmt.setString(11, acthittype);
+					inserthousenumberWithGeometryStmt.setString(12, actosmtype);  
+					inserthousenumberWithGeometryStmt.setLong(13, actosmid);
+					inserthousenumberWithGeometryStmt.setString(14, actosmtag);
+					inserthousenumberWithGeometryStmt.setDouble(15, actlon);
+					inserthousenumberWithGeometryStmt.setDouble(16, actlat);
 					
 					//System.out.println("insert_sql statement ===" + inserthousenumberWithGeometrySql + "===");
 					try {
