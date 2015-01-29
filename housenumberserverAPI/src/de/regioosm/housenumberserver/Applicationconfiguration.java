@@ -35,8 +35,8 @@ public class Applicationconfiguration {
 	
 	public Applicationconfiguration () {
 			// get some configuration infos
-		//String configuration_filename = "hausnummern.properties";
 		String configuration_filename = "/home/openstreetmap/NASI/OSMshare/programme/git/housenumberserverAPI/housenumberclient.properties";
+//		String configuration_filename = "/home/osm/apps/housenumberserverAPI";
 System.out.println("configuration_filename ===" + configuration_filename+ "===");
 
 	try {
