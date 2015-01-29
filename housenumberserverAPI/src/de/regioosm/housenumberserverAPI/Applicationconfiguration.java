@@ -1,4 +1,4 @@
-package de.regioosm.housenumberserver;
+package de.regioosm.housenumberserverAPI;
 import java.io.FileReader;
 import java.io.Reader;
 import java.util.Properties;
@@ -10,24 +10,16 @@ public class Applicationconfiguration {
 	public String servername = "";
 	public String application_homedir = "";
 	public String application_datadir = "";
+	public String upload_homedir = "";
 	public String db_structure = "osm2pgsql";
 	public String db_application_url = "";
 	public String db_application_username = "";
 	public String db_application_password = "";
-	public String db_application_listofstreets_url = "";
-	public String db_application_listofstreets_username = "";
-	public String db_application_listofstreets_password = "";
 	public String db_osm2pgsql_url = "";
 	public String db_osm2pgsql_username = "";
 	public String db_osm2pgsql_password = "";
 	public String db_osm2pgsqlwrite_username = "";
 	public String db_osm2pgsqlwrite_password = "";
-	public String db_osm2pgsqlfullhistoryodbl_url = "";
-	public String db_osm2pgsqlfullhistoryodbl_username = "";
-	public String db_osm2pgsqlfullhistoryodbl_password = "";
-	public String db_osm2pgsqlfullhistoryccbysa_url = "";
-	public String db_osm2pgsqlfullhistoryccbysa_username = "";
-	public String db_osm2pgsqlfullhistoryccbysa_password = "";
 	public String osmosis_laststatefile = "";
 	public String logging_filename = "";
 	public Level logging_console_level = Level.FINEST;
@@ -35,8 +27,8 @@ public class Applicationconfiguration {
 	
 	public Applicationconfiguration () {
 			// get some configuration infos
-		//String configuration_filename = "hausnummern.properties";
-		String configuration_filename = "/home/openstreetmap/NASI/OSMshare/programme/git/housenumberserverAPI/housenumberclient.properties";
+		String configuration_filename = "/home/openstreetmap/NASI/OSMshare/programme/git/housenumberserverAPI/housenumberserverAPI.properties";
+//		String configuration_filename = "/home/osm/apps/housenumberserverAPI/housenumberserverAPI.properties";
 System.out.println("configuration_filename ===" + configuration_filename+ "===");
 
 	try {
@@ -54,18 +46,14 @@ System.out.println("configuration_filename ===" + configuration_filename+ "===")
 				this.application_homedir = prop.getProperty("application_homedir");
 			if( prop.getProperty("application_datadir") != null)
 				this.application_datadir = prop.getProperty("application_datadir");
+			if( prop.getProperty("upload_homedir") != null)
+				this.upload_homedir = prop.getProperty("upload_homedir");
 			if( prop.getProperty("db_application_url") != null)
 				this.db_application_url = prop.getProperty("db_application_url");
 			if( prop.getProperty("db_application_username") != null)
 				this.db_application_username = prop.getProperty("db_application_username");
 			if( prop.getProperty("db_application_password") != null)
 				this.db_application_password = prop.getProperty("db_application_password");
-			if( prop.getProperty("db_application_listofstreets_url") != null)
-				this.db_application_listofstreets_url = prop.getProperty("db_application_listofstreets_url");
-			if( prop.getProperty("db_application_listofstreets_username") != null)
-				this.db_application_listofstreets_username = prop.getProperty("db_application_listofstreets_username");
-			if( prop.getProperty("db_application_listofstreets_password") != null)
-				this.db_application_listofstreets_password = prop.getProperty("db_application_listofstreets_password");
 			if( prop.getProperty("db_osm2pgsql_url") != null)
 				this.db_osm2pgsql_url = prop.getProperty("db_osm2pgsql_url");
 			if( prop.getProperty("db_osm2pgsql_username") != null)
@@ -78,18 +66,6 @@ System.out.println("configuration_filename ===" + configuration_filename+ "===")
 				this.db_osm2pgsqlwrite_password = prop.getProperty("db_osm2pgsqlwrite_password");
 
 
-			if( prop.getProperty("db_osm2pgsqlfullhistoryodbl_url") != null)
-				this.db_osm2pgsqlfullhistoryodbl_url = prop.getProperty("db_osm2pgsqlfullhistoryodbl_url");
-			if( prop.getProperty("db_osm2pgsqlfullhistoryodbl_username") != null)
-				this.db_osm2pgsqlfullhistoryodbl_username = prop.getProperty("db_osm2pgsqlfullhistoryodbl_username");
-			if( prop.getProperty("db_osm2pgsqlfullhistoryodbl_password") != null)
-				this.db_osm2pgsqlfullhistoryodbl_password = prop.getProperty("db_osm2pgsqlfullhistoryodbl_password");
-			if( prop.getProperty("db_osm2pgsqlfullhistoryccbysa_url") != null)
-				this.db_osm2pgsqlfullhistoryccbysa_url = prop.getProperty("db_osm2pgsqlfullhistoryccbysa_url");
-			if( prop.getProperty("db_osm2pgsqlfullhistoryccbysa_username") != null)
-				this.db_osm2pgsqlfullhistoryccbysa_username = prop.getProperty("db_osm2pgsqlfullhistoryccbysa_username");
-			if( prop.getProperty("db_osm2pgsqlfullhistoryccbysa_password") != null)
-				this.db_osm2pgsqlfullhistoryccbysa_password = prop.getProperty("db_osm2pgsqlfullhistoryccbysa_password");
 			if( prop.getProperty("osmosis_laststatefile") != null)
 				this.osmosis_laststatefile = prop.getProperty("osmosis_laststatefile");
 			if( prop.getProperty("logging_filename") != null)
@@ -103,23 +79,15 @@ System.out.println("configuration_filename ===" + configuration_filename+ "===")
 			System.out.println(" .servername                              ==="+this.servername+"===");
 			System.out.println(" .application_homedir                     ==="+this.application_homedir+"===");
 			System.out.println(" .application_datadir                     ==="+this.application_datadir+"===");
+			System.out.println(" .upload_homedir                          ==="+this.upload_homedir+"===");
 			System.out.println(" .db_application_url                      ==="+this.db_application_url+"===");
 			System.out.println(" .db_application_username                 ==="+this.db_application_username+"===");
 			System.out.println(" .db_application_password                 ==="+this.db_application_password+"===");
-			System.out.println(" .db_application_listofstreets_url        ==="+this.db_application_listofstreets_url+"===");
-			System.out.println(" .db_application_listofstreets_username   ==="+this.db_application_listofstreets_username+"===");
-			System.out.println(" .db_application_listofstreets_password   ==="+this.db_application_listofstreets_password+"===");
 			System.out.println(" .db_osm2pgsql_url                        ==="+this.db_osm2pgsql_url+"===");
 			System.out.println(" .db_osm2pgsql_username                   ==="+this.db_osm2pgsql_username+"===");
 			System.out.println(" .db_osm2pgsql_password                   ==="+this.db_osm2pgsql_password+"===");
 			System.out.println(" .db_osm2pgsqlwrite_username              ==="+this.db_osm2pgsqlwrite_username+"===");
 			System.out.println(" .db_osm2pgsqlwrite_password              ==="+this.db_osm2pgsqlwrite_password+"===");
-			System.out.println(" .db_osm2pgsqlfullhistoryodbl_url         ==="+this.db_osm2pgsqlfullhistoryodbl_url+"===");
-			System.out.println(" .db_osm2pgsqlfullhistoryodbl_username    ==="+this.db_osm2pgsqlfullhistoryodbl_username+"===");
-			System.out.println(" .db_osm2pgsqlfullhistoryodbl_password    ==="+this.db_osm2pgsqlfullhistoryodbl_password+"===");
-			System.out.println(" .db_osm2pgsqlfullhistoryccbysa_url       ==="+this.db_osm2pgsqlfullhistoryccbysa_url+"===");
-			System.out.println(" .db_osm2pgsqlfullhistoryccbysa_username  ==="+this.db_osm2pgsqlfullhistoryccbysa_username+"===");
-			System.out.println(" .db_osm2pgsqlfullhistoryccbysa_password  ==="+this.db_osm2pgsqlfullhistoryccbysa_password+"===");
 			System.out.println(" .osmosis_laststatefile                   ==="+this.osmosis_laststatefile+"===");
 			System.out.println(" .logging_filename                        ==="+this.logging_filename +"===");
 			System.out.println(" .logging_console_level                   ==="+this.logging_console_level.toString() +"===");

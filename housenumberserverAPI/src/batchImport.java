@@ -1,34 +1,21 @@
-package de.regioosm.housenumberserver;
+
 
 import java.io.BufferedReader;
 import java.io.File;
-import java.io.BufferedWriter;
 import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.io.OutputStreamWriter;
-import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
-
-import javax.servlet.ServletException;
-import javax.servlet.annotation.MultipartConfig;
-import javax.servlet.annotation.WebServlet;
-import javax.servlet.http.HttpServlet;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
-import java.text.DateFormat;
-import java.text.SimpleDateFormat;
 import java.util.*;
 
-import net.balusc.http.multipart.MultipartMap;
+import de.regioosm.housenumberserverAPI.Applicationconfiguration;
+
 
 /**
  * Upload of a housenumber evaluation result file via a multipart/form-data request for the client.
@@ -50,26 +37,17 @@ import net.balusc.http.multipart.MultipartMap;
  * 			needed 7,9 minutes  in transaction mode and with serial insert sql statements
  * 
  */
-	// the url, when this servlet class will be executed
-@WebServlet("/Upload")
 	//	parameters for external class, which interpret the client request:
 	//	location: to which temporary directory, a file can be created and stored.
 	//	maxFileSize: up to which size, the upload file can be. CAUTION: as of 2015-01-11, the upload file is not compressed
-@MultipartConfig(location = "/tmp", maxFileSize = 20971520) // 20MB.	
-public class Upload extends HttpServlet {
-	private static final long serialVersionUID = 1L;
+public class batchImport {
 		// load content of configuration file, which contains filesystem entries and database connection details
 	static Applicationconfiguration configuration = new Applicationconfiguration();
 	static Connection con_hausnummern;
 
-    /**
-     * @see HttpServlet#HttpServlet()
-     */
-    public Upload() {
-        super();
-        // TODO Auto-generated constructor stub
-    }
-
+		// storage of streetnames and their internal DB id. If a street is missing in DB, it will be inserted,
+		// before the insert of the housenumbers at the streets will be inserted
+	static HashMap<String, Integer> street_idlist = new HashMap<String, Integer>();
 
     /**
      * normalize housenumber to 4 digits, filling some prefix 0 (zeros), to enable sorting of housenumbers, even with literal suffixes
@@ -77,7 +55,7 @@ public class Upload extends HttpServlet {
      * @param hausnummer: 	housenumber, optionally with numeric or literal suffixes
      * @return:	housenumber in normalized form, means with leading 0 (zeros). Housenumber "3a" will be returned to "0003a", "157 1/2a" to "0157 1/2a"
      */
-    private String setHausnummerNormalisiert(String hausnummer) {
+    private static String setHausnummerNormalisiert(String hausnummer) {
 		String hausnummersortierbar = "";
     	if(hausnummer != "") {
     		int numstellen = 0;
@@ -103,19 +81,75 @@ public class Upload extends HttpServlet {
      * @param municipality: municipality part of identification of result file.
      * @return: errors in string format
      */
-    private String insertResultIntoDB(String content, String uploadcountry, String uploadmunicipality, String uploadjobname) {
+    private static boolean insertResultIntoDB(String content) {
 		java.util.Date insertResultIntoDBouter = new java.util.Date();
-		java.util.Date insertResultIntoDBinner = new java.util.Date();
 
 		java.util.Date evaluationtime = null;
 		java.util.Date osmtime = null;
 
 		if(content.length() == 0) {
+//TODO print to error log
 			System.out.println("leerer Content, Abbruch");
-			return "leer Content, Abbruch";
+			return true;
 		}
 
 		try {
+			int countryid = 0;
+			String country = "";
+			int municipalityid = 0;
+			String municipality = "";
+			int jobid = 0;
+			String jobname = "";
+			String officialkeysId = "";
+			Integer adminlevel = 0;
+			String polygonAsText = "";
+			Integer polygonSrid = 0;
+
+			
+			String lines[] = content.split("\n");
+			// loop over all result file lines
+			for(int lineindex = 0; lineindex < lines.length; lineindex++) {
+				String actline = lines[lineindex];
+				if(actline == "")
+					continue;
+					// analyse first line of uploaded file, if it contains the line with all file columns
+					// ignore other comment lines
+				if(actline.indexOf("#") == 0) {
+					if(actline.indexOf("#Para ") == 0) {
+						String keyvalue[] = actline.substring(6).split("=");
+						String key = keyvalue[0];
+						String value = keyvalue[1];
+						System.out.println("Info: found comment line with parameter [" + key + "] ===" + value + "===");
+	
+						if(key.equals("OSMTime")) {
+							osmtime = new java.util.Date(Long.parseLong(value));
+						}
+						if(key.equals("EvaluationTime")) {
+							evaluationtime = new java.util.Date(Long.parseLong(value));
+						}
+						if(key.equals("Country")) {
+							country = value;
+						}
+						if(key.equals("Municipality")) {
+							municipality = value;
+						}
+						if(key.equals("Adminlevel")) {
+							adminlevel = Integer.parseInt(value);
+						}
+
+						if(key.equals("Jobname")) {
+							jobname = value;
+						}
+						if(key.equals("Officialkeysid")) {
+							officialkeysId = value;
+						}
+					}
+				}
+			}
+			
+			if(officialkeysId.equals(""))
+				officialkeysId = "%";
+
 			Class.forName("org.postgresql.Driver");
 	
 			String url_hausnummern = configuration.db_application_url;
@@ -124,42 +158,61 @@ public class Upload extends HttpServlet {
 			System.out.println("beginn von insertfkt");
 			
 			String select_sql = "SELECT land.id AS countryid, land,"
-				+ " stadt.id AS municipalityid, stadt,"
+				+ " stadt.id AS municipalityid, stadt, officialkeys_id, admin_level,"
 				+ " ST_AsText(polygon) AS polygon_astext, ST_SRID(polygon) AS polygon_srid,"
 				+ " jobs.id AS jobid, jobname"
 				+ " FROM land, stadt, gebiete, jobs WHERE"
 				+ " land = ?"
 				+ " AND stadt = ?"
 				+ " AND jobname = ?"
-				+ " AND gebiete.stadt_id = stadt.id"
+				+ " AND officialkeys_id like ?";
+				if(adminlevel != 0)
+					select_sql += " AND admin_level = ?";
+				select_sql += " AND gebiete.stadt_id = stadt.id"
 				+ " AND jobs.gebiete_id = gebiete.id"
 				+ " ORDER BY admin_level;";
 
 			PreparedStatement selectqueryStmt = con_hausnummern.prepareStatement(select_sql);
-			selectqueryStmt.setString(1, uploadcountry);
-			selectqueryStmt.setString(2, uploadmunicipality);
-			selectqueryStmt.setString(3, uploadjobname);
+			selectqueryStmt.setString(1, country);
+			selectqueryStmt.setString(2, municipality);
+			selectqueryStmt.setString(3, jobname);
+			selectqueryStmt.setString(4, officialkeysId);
+			if(adminlevel != 0)
+				selectqueryStmt.setInt(5, adminlevel);
 			ResultSet existingmunicipalityRS = selectqueryStmt.executeQuery();
 
 
-			int countryid = 0;
-			String country = "";
-			int municipalityid = 0;
-			String municipality = "";
-			int jobid = 0;
-			String jobname = "";
-
 					//TODO check and code, what happens with more than one row
-			if (existingmunicipalityRS.next()) {
+			Integer countHits = 0;
+			StringBuffer moreThanOneRowContent = new StringBuffer();
+			while(existingmunicipalityRS.next()) {
+				countHits++;
 				countryid = existingmunicipalityRS.getInt("countryid");
 				country = existingmunicipalityRS.getString("land");
 				municipalityid = existingmunicipalityRS.getInt("municipalityid");
 				municipality = existingmunicipalityRS.getString("stadt");
 				jobid = existingmunicipalityRS.getInt("jobid");
 				jobname = existingmunicipalityRS.getString("jobname");
-			} else {
+				polygonAsText = existingmunicipalityRS.getString("polygon_astext");
+				polygonSrid = existingmunicipalityRS.getInt("polygon_srid");
+				moreThanOneRowContent.append(country + "," + municipality + "," + existingmunicipalityRS.getString("officialkeys_id") 
+					+ "," + existingmunicipalityRS.getInt("admin_level") + "," + jobname + "\n");
+			}
+
+			if(countHits > 1) {
+				System.out.println("Error: more than one related jobs were found, CANCEL import ...");
+				System.out.println(moreThanOneRowContent.toString());
 				selectqueryStmt.close();
-				return "Error: There is no matching municipality '" + municipality + "' within the country '" + country + "' in the server side housenumber database. The uploaded result will be suspended";
+				con_hausnummern.close();
+				return false;
+			} else if(countHits == 0) {
+				selectqueryStmt.close();
+				System.out.println("Error: There is no matching municipality, the uploaded result will be suspended ...");
+				System.out.println("  country ===" + country + "===, municipality ===" 
+						+ municipality + "===, officialkeysId ===" + officialkeysId + "===, jobname ===" + jobname + "===");
+				selectqueryStmt.close();
+				con_hausnummern.close();
+				return false;
 			}
 			
 			System.out.println("related DB job: id # " + jobid + "    jobname ===" + jobname + "===   in  " + municipality + ", " + country);
@@ -182,9 +235,6 @@ public class Upload extends HttpServlet {
 			}
 			deletelastevaluationStmt.close();
 
-				// storage of streetnames and their internal DB id. If a street is missing in DB, it will be inserted,
-				// before the insert of the housenumbers at the streets will be inserted
-			HashMap<String, Integer> street_idlist = new HashMap<String, Integer>();
 
 			String selectallofficialstreetsSql = "SELECT DISTINCT ON (strasse) strasse, strasse.id AS id"
 				+ " FROM stadt_hausnummern, strasse, stadt, land"
@@ -202,8 +252,10 @@ public class Upload extends HttpServlet {
 				selectallofficialstreetsStmt.setString(2, country);
 				ResultSet selectallofficialstreetsRS = selectallofficialstreetsStmt.executeQuery();
 				while(selectallofficialstreetsRS.next()) {
-					street_idlist.put(selectallofficialstreetsRS.getString("strasse"), selectallofficialstreetsRS.getInt("id"));
-					numberStreetsFromOfficialList++;
+					if(! street_idlist.containsKey(selectallofficialstreetsRS.getString("strasse"))) {
+						street_idlist.put(selectallofficialstreetsRS.getString("strasse"), selectallofficialstreetsRS.getInt("id"));
+						numberStreetsFromOfficialList++;
+					}
 				}
 			}
 			catch( SQLException e) {
@@ -245,7 +297,6 @@ public class Upload extends HttpServlet {
 
 				// store column names, below found in file header line
 			HashMap<Integer, String> headerfield = new HashMap<Integer, String>();
-			String lines[] = content.split("\n");
 
 				// loop over all result file lines
 			int countHousenumbersIdentical = 0;
@@ -282,6 +333,15 @@ public class Upload extends HttpServlet {
 						}
 						if(key.equals("EvaluationTime")) {
 							evaluationtime = new java.util.Date(Long.parseLong(value));
+						}
+						if(key.equals("Country")) {
+							country = value;
+						}
+						if(key.equals("Municipality")) {
+							municipality = value;
+						}
+						if(key.equals("Jobname")) {
+							jobname = value;
 						}
 					}
 					continue;
@@ -396,11 +456,7 @@ public class Upload extends HttpServlet {
 					inserthousenumberWithoutGeometryStmt.setString(14, actosmtag);
 					//System.out.println("insert_sql statement ===" + inserthousenumberWithoutGeometrySql + "===");
 					try {
-						java.util.Date time_beforeinsert = new java.util.Date();
 						inserthousenumberWithoutGeometryStmt.executeUpdate();
-						java.util.Date time_afterinsert = new java.util.Date();
-						//System.out.println("TIME for insert record osmhausnummern_hausnummern " + actstreet + " " + acthousenumber + " " + acthittype
-						//	+ ", in ms. "+(time_afterinsert.getTime()-time_beforeinsert.getTime()));
 					}
 					catch( SQLException e) {
 						System.out.println("ERROR: during insert in table auswertung_hausnummern, insert code was ===" + inserthousenumberWithoutGeometrySql + "===");
@@ -426,11 +482,7 @@ public class Upload extends HttpServlet {
 					
 					//System.out.println("insert_sql statement ===" + inserthousenumberWithGeometrySql + "===");
 					try {
-						java.util.Date time_beforeinsert = new java.util.Date();
 						inserthousenumberWithGeometryStmt.executeUpdate();
-						java.util.Date time_afterinsert = new java.util.Date();
-						//System.out.println("TIME for insert record osmhausnummern_hausnummern " + actstreet + " " + acthousenumber + " " + acthittype
-						//	+ ", in ms. "+(time_afterinsert.getTime()-time_beforeinsert.getTime()));
 					}
 					catch( SQLException e) {
 						System.out.println("ERROR: during insert in table auswertung_hausnummern, insert code was ===" + inserthousenumberWithGeometrySql + "===");
@@ -503,8 +555,8 @@ public class Upload extends HttpServlet {
 					updateEvaluationResultMapStmt.setInt(4, countHousenumbersListonly);
 					updateEvaluationResultMapStmt.setInt(5, countHousenumbersOsmonly);
 					updateEvaluationResultMapStmt.setInt(6, (int)(Math.round(resultpercentfulfilled * 10.0) / 10.0));
-					updateEvaluationResultMapStmt.setString(7, existingmunicipalityRS.getString("polygon_astext"));
-					updateEvaluationResultMapStmt.setInt(8, existingmunicipalityRS.getInt("polygon_srid"));
+					updateEvaluationResultMapStmt.setString(7, polygonAsText);
+					updateEvaluationResultMapStmt.setInt(8, polygonSrid);
 					updateEvaluationResultMapStmt.setInt(9, countryid);
 					updateEvaluationResultMapStmt.setInt(10, municipalityid);
 					updateEvaluationResultMapStmt.setInt(11, jobid);
@@ -525,8 +577,8 @@ public class Upload extends HttpServlet {
 					insertEvaluationResultMapStmt.setInt(7, countHousenumbersListonly);
 					insertEvaluationResultMapStmt.setInt(8, countHousenumbersOsmonly);
 					insertEvaluationResultMapStmt.setInt(9, (int)(Math.round(resultpercentfulfilled * 10.0) / 10.0));
-					insertEvaluationResultMapStmt.setString(10, existingmunicipalityRS.getString("polygon_astext"));
-					insertEvaluationResultMapStmt.setInt(11, existingmunicipalityRS.getInt("polygon_srid"));
+					insertEvaluationResultMapStmt.setString(10, polygonAsText);
+					insertEvaluationResultMapStmt.setInt(11, polygonSrid);
 					insertEvaluationResultMapStmt.executeUpdate();
 					insertEvaluationResultMapStmt.close();
 				}
@@ -565,138 +617,70 @@ public class Upload extends HttpServlet {
 				System.out.println("inner sql-exception (tried to to close connection ...");
 				innere.printStackTrace();
 			}
-			return e.toString();
+			return false;
 		}
 		System.out.println("time for insertResultIntoDBouter in sek: " + (new Date().getTime() - insertResultIntoDBouter.getTime())/1000);
-		return "Ende der sub-fkt. insertResultIntoDB";
+		return true;
 	}
-    
-	/**
-	 * @see HttpServlet#doGet(HttpServletRequest request, HttpServletResponse response)
-	 */
-	protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-		PrintWriter writer = response.getWriter();
+
+
+	public static void main(String args[]) {
+//TODO entry to configuration file
+		String resultfiles_rootpath = configuration.upload_homedir;
+
+		String resultfiles_uploadpath = resultfiles_rootpath  + File.separator + "open";
+		String resultfiles_importedpath = resultfiles_rootpath  + File.separator + "imported";
 		
-		writer.println("<html>");
-		writer.println("<head><title>doGet aktiv</title></head>");
-		writer.println("<body>");
-		writer.println("	<h1>Hello World und Otto from a Servlet in Upload.java!</h1>");
-		writer.println("<body>");
-		writer.println("</html>");
-			
-		writer.close();
-	}
-
-	/**
-	 * @see HttpServlet#doPost(HttpServletRequest request, HttpServletResponse response)
-	 */
-	protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-
 		String filename = "";
 		try {
-			System.out.println("request kompletto ===" + request.toString() + "===");
-			System.out.println("ok, in doPost angekommen ...");
-			MultipartMap map = new MultipartMap(request, this);
 
-			System.out.println("nach multipartmap in doPost ...");
+			File dir_filestructure = new File(resultfiles_uploadpath);
 
-			String country = map.getParameter("country");
-			String municipality = map.getParameter("municipality");
-			String jobname = map.getParameter("jobname");
-			File file = map.getFile("result");
-			System.out.println("temporary file ===" + file.getAbsoluteFile() + "===");
+			String[] dirrelative_stringarray = dir_filestructure.list();
+			System.out.println("Number of entries in directory: "+dirrelative_stringarray.length+" in Directory ==="+resultfiles_uploadpath+"===");
+			for(Integer diri=0;diri<dirrelative_stringarray.length;diri++) {
+				String actualFilename = dirrelative_stringarray[diri];
+				String actual_entry = resultfiles_uploadpath + File.separator + actualFilename;
+				File actual_filehandle = new File(actual_entry);
+				System.out.println("actual file entry ===" + actualFilename + "=== in directory ==="+resultfiles_uploadpath+"===   complete path ==="+actual_entry+"===");
+				if(actual_filehandle.isDirectory()) {
+					System.out.println("actual file entry is DIRECTORY ===" + actualFilename 
+						+ "=== Sub directory " + actual_entry + " will be ignored within directory ===" + resultfiles_uploadpath);
+				}
+				else if (actual_filehandle.isFile()) {
+					if(actualFilename.indexOf(".") != -1) {
+						String actual_fileextension = actualFilename.substring(actualFilename.lastIndexOf(".")+1);
+						System.out.println("actual file entry has fileextension ==="+actual_fileextension+"===");
+						if(actual_fileextension.equals("result")) {
+							System.out.println("actual file entry is FILE and .result ==="+actualFilename+"=== (subcall starts...) in directory ===" 
+								+ resultfiles_uploadpath + "===   complete path ===" + resultfiles_uploadpath + File.separator
+								+ actualFilename.substring(0,actualFilename.lastIndexOf("."))+"===");
 
-			BufferedReader filereader = new BufferedReader(new InputStreamReader(new FileInputStream(file.getAbsoluteFile()),StandardCharsets.UTF_8));
-		    String fileline = "";
-		    StringBuffer filecontent = new StringBuffer();
-		    while ((fileline = filereader.readLine()) != null) {
-		    	filecontent.append(fileline + "\n");
-			}
-			filereader.close();
+							BufferedReader filereader = new BufferedReader(new InputStreamReader(new FileInputStream(actual_filehandle.getAbsoluteFile()),StandardCharsets.UTF_8));
+							String fileline = "";
+							StringBuffer filecontent = new StringBuffer();
+							while ((fileline = filereader.readLine()) != null) {
+								filecontent.append(fileline + "\n");
+							}
+							filereader.close();
+							
+							String content = filecontent.toString();
 
-			String content = filecontent.toString();
-
-			// Now do your thing with the obtained input.
-			System.out.println(" country      ===" + country + "===");
-			System.out.println(" municipality ===" + municipality + "===");
-			System.out.println(" jobname      ===" + jobname + "===");
-			System.out.println(" content length ===" + content.length() + "===");
-
-
-				// output Character Encoding MUST BE SET previously to response.getWriter to work !!!
-			response.setContentType("text/html; charset=utf-8");
-			response.setHeader("Content-Encoding", "UTF-8");
-			
-			PrintWriter writer = response.getWriter();
-
-
-			writer.println("<html>");
-			writer.println("<head><meta charset=\"utf-8\"><title>doPost aktiv</title></head>");
-			writer.println("<body>");
-			writer.println("	<h1>Upload.java!</h1>");
-
-
-			DateFormat time_formatter = new SimpleDateFormat("yyyyMMdd-HHmmssZ");
-			String uploadtime = time_formatter.format(new Date());
-
-			filename += "/home/openstreetmap/temp/uploaddata/open";
-			filename += "/" + uploadtime + ".result";
-			System.out.println("uploaddatei ===" + filename + "===");
-
-			File outputfile = new File(filename);
-			outputfile.createNewFile();
-
-			System.out.println("Filerechte vor setzen ...");
-			System.out.println("Is Execute allow : " + outputfile.canExecute());
-			System.out.println("Is Write allow : " + outputfile.canWrite());
-			System.out.println("Is Read allow : " + outputfile.canRead());
-
-			outputfile.setReadable(true);
-			outputfile.setWritable(true);
-			outputfile.setExecutable(false);
-
-			File outputfile2 = new File(filename);
-			System.out.println("Filerechte nach setzen ...");
-			System.out.println("Is Execute allow : " + outputfile2.canExecute());
-			System.out.println("Is Write allow : " + outputfile2.canWrite());
-			System.out.println("Is Read allow : " + outputfile2.canRead());
-
-			PrintWriter uploadOutput = null;
-			uploadOutput = new PrintWriter(new BufferedWriter(new OutputStreamWriter(
-					new FileOutputStream(filename),StandardCharsets.UTF_8)));
-			uploadOutput.println(content);
-			uploadOutput.close();
-
-				// at 2015-01-20, inserted here to send the response to the client
-				//			AFTER the result file has been imported into the DB,
-				//			because otherwise, not all imports are successfully
-			System.out.println(" Sub-fkt insertResultIntoDB wird aufgerufen ...");
-			System.out.println(insertResultIntoDB(content, country, municipality, jobname));
-			System.out.println(" Sub-fkt insertResultIntoDB ist fertig");
-
-			writer.println(" country ===" + country + "===");
-			writer.println(" municipality ===" + municipality + "===");
-			writer.println(" content length ===" + content.length() + "===");
-
-			writer.println("<body>");
-			writer.println("</html>");
-				
-			writer.close();
-
-			System.out.println("request.getCharacterEncoding() ===" + request.getCharacterEncoding() + "===");
-			System.out.println(" country ===" + country + "===");
-			System.out.println(" municipality ===" + municipality + "===");
-			System.out.println(" jobname ===" + jobname + "===");
-
+							boolean imported = insertResultIntoDB(content);
+							if(imported) {
+								String destinationFilename = resultfiles_importedpath + File.separator + actualFilename;
+								File destinationFilenameHandle = new File(destinationFilename);
+								actual_filehandle.renameTo(destinationFilenameHandle);
+							}
+						}
+					}
+				}
+			} // end of for-loop over actual path
 		} catch (IOException ioerror) {
 			System.out.println("ERORR: IOException happened, details follows ...");
 			System.out.println(" .. couldn't open file to write, filename was ===" + filename + "===");
 			System.out.println(" .. couldn't open file to write, filename was ===" + ioerror.toString() + "===");
 			ioerror.printStackTrace();
-		} catch (ServletException se) {
-			System.out.println("ServletException happened, details follows ...");
-			System.out.println("  .. details ===" + se.toString() + "===");
-			se.printStackTrace();
 		}
 	}
 }
