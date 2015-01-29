@@ -570,13 +570,13 @@ public class Upload extends HttpServlet {
 		System.out.println("time for insertResultIntoDBouter in sek: " + (new Date().getTime() - insertResultIntoDBouter.getTime())/1000);
 		return "Ende der sub-fkt. insertResultIntoDB";
 	}
-    
+
 	/**
 	 * @see HttpServlet#doGet(HttpServletRequest request, HttpServletResponse response)
 	 */
 	protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
 		PrintWriter writer = response.getWriter();
-		
+
 		writer.println("<html>");
 		writer.println("<head><title>doGet aktiv</title></head>");
 		writer.println("<body>");
