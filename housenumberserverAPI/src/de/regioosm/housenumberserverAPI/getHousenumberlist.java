@@ -247,7 +247,6 @@ public class getHousenumberlist extends HttpServlet {
 				if(selectMunicipalityRS.getString("municipality_jobname") != null)
 					municipalityJobname = selectMunicipalityRS.getString("municipality_jobname");
 			}
-System.out.println("municipalityJobId: " + municipalityJobId + ", municipalityJobname ===" + municipalityJobname + "===");
 			selectMunicipalityStmt.close();
 			requestEndtime = new java.util.Date();
 			System.out.println("time for query for municipality in sec: " + (requestEndtime.getTime() - requestStarttime.getTime())/1000);
