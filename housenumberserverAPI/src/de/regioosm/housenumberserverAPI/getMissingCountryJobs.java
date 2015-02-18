@@ -47,7 +47,7 @@ import net.balusc.http.multipart.MultipartMap;
 public class getMissingCountryJobs extends HttpServlet {
 	private static final long serialVersionUID = 1L;
 		// load content of configuration file, which contains filesystem entries and database connection details
-	static Applicationconfiguration configuration = new Applicationconfiguration();
+	static Applicationconfiguration configuration;
 	static Connection con_hausnummern;
 
     /**
@@ -83,6 +83,11 @@ public class getMissingCountryJobs extends HttpServlet {
 		try {
 			System.out.println("request komplett ===" + request.toString() + "===");
 			System.out.println("ok, in doPost angekommen ...");
+
+			String path = request.getServletContext().getRealPath("/WEB-INF");
+			System.out.println("path for/WEB-INF ===" + path + "===");
+			configuration = new Applicationconfiguration(path);
+			
 			MultipartMap map = new MultipartMap(request, this);
 
 			System.out.println("nach multipartmap in doPost ...");
@@ -116,17 +121,18 @@ public class getMissingCountryJobs extends HttpServlet {
 				+ " AND jobs.gebiete_id = gebiete.id"
 				+ " AND stadt.id NOT IN"
 				+ " (SELECT s.id FROM"
-				+ " evaluations AS e, jobs AS j, gebiete AS g, stadt AS s"
+				+ " evaluations AS e, jobs AS j, gebiete AS g, stadt AS s, land as l"
 				+ " WHERE e.job_id = j.id AND"
 				+ " j.gebiete_id = g.id AND"
 				+ " g.stadt_id = s.id AND"
-				+ " s.land_id = 7 AND"
-				+ " admin_level = 7)"		//  7 = Poland, in most other countries it's level 8
+				+ " s.land_id = l.id AND"
+				+ " land = ?)"
 				+ " ORDER BY stadt, officialkeys_id, jobname;";
 
 			System.out.println("SQL-Query to find requested jobs for client ===" + select_sql + "===");
 			PreparedStatement selectqueryStmt = con_hausnummern.prepareStatement(select_sql);
 			selectqueryStmt.setString(1, country);
+			selectqueryStmt.setString(2, country);
 			ResultSet existingmunicipalityRS = selectqueryStmt.executeQuery();
 
 			StringBuffer dataoutput = new StringBuffer();

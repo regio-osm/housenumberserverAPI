@@ -42,7 +42,7 @@ import de.regioosm.housenumberserverAPI.Applicationconfiguration;
 	//	maxFileSize: up to which size, the upload file can be. CAUTION: as of 2015-01-11, the upload file is not compressed
 public class batchImport {
 		// load content of configuration file, which contains filesystem entries and database connection details
-	static Applicationconfiguration configuration = new Applicationconfiguration();
+	static Applicationconfiguration configuration = new Applicationconfiguration("./");
 	static Connection con_hausnummern;
 
 		// storage of streetnames and their internal DB id. If a street is missing in DB, it will be inserted,
@@ -216,7 +216,9 @@ public class batchImport {
 			}
 			
 			System.out.println("related DB job: id # " + jobid + "    jobname ===" + jobname + "===   in  " + municipality + ", " + country);
+//TODO check tstamp of last evaluation of actual job: tstamp-date must be older than tstamp date from actual result file. Otherwise ignore actual file
 
+			
 				// delete up to now active evaluation for same municipality
 				// It will be checked against jobname = municipality name to only delete complete municipality evaluation, 
 				// not optionally available subadmin evaluations
@@ -630,6 +632,39 @@ public class batchImport {
 
 		String resultfiles_uploadpath = resultfiles_rootpath  + File.separator + "open";
 		String resultfiles_importedpath = resultfiles_rootpath  + File.separator + "imported";
+
+		for (int lfdnr = 0; lfdnr < args.length; lfdnr++) {
+			System.out.println("args[" + lfdnr + "] ===" + args[lfdnr] + "===");
+		}
+		if ((args.length >= 1) && (args[0].equals("-h"))) {
+			System.out.println("-opendir directory");
+			System.out.println("-importeddir directory");
+			return;
+		}
+		
+		if (args.length >= 1) {
+			int argsOkCount = 0;
+			for (int argsi = 0; argsi < args.length; argsi += 2) {
+				System.out.print(" args pair analysing #: " + argsi + "  ===" + args[argsi] + "===");
+				if (args.length > argsi + 1) {
+					System.out.println("  args # + 1: " + (argsi + 1) + "   ===" + args[argsi + 1] + "===");
+				}
+				if (args[argsi].equals("-opendir")) {
+					resultfiles_uploadpath = args[argsi + 1];
+					argsOkCount  += 2;
+				}
+				if (args[argsi].equals("-importeddir")) {
+					resultfiles_importedpath = args[argsi + 1];
+					argsOkCount  += 2;
+				}
+			}
+			if (argsOkCount < args.length) {
+				System.out.println("ERROR: not all programm parameters were valid, STOP");
+				return;
+			}
+		}
+		
+		
 		
 		String filename = "";
 		try {
