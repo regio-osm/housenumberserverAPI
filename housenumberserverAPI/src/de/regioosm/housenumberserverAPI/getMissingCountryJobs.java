@@ -1,4 +1,4 @@
-package de.regioosm.housenumberserver;
+package de.regioosm.housenumberserverAPI;
 
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -39,21 +39,21 @@ import net.balusc.http.multipart.MultipartMap;
  * 
  */
 	// the url, when this servlet class will be executed
-@WebServlet("/findjobs")
+@WebServlet("/getMissingCountryJobs")
 	//	parameters for external class, which interpret the client request:
 	//	location: to which temporary directory, a file can be created and stored.
 	//	maxFileSize: up to which size, the upload file can be. CAUTION: as of 2015-01-11, the upload file is not compressed
-@MultipartConfig(location = "/tmp", maxFileSize = 20971520) // 20MB.	
-public class findjobs extends HttpServlet {
+@MultipartConfig(location = "/tmp", maxFileSize = 20971520) // 20MB.
+public class getMissingCountryJobs extends HttpServlet {
 	private static final long serialVersionUID = 1L;
 		// load content of configuration file, which contains filesystem entries and database connection details
-	static Applicationconfiguration configuration = new Applicationconfiguration();
+	static Applicationconfiguration configuration;
 	static Connection con_hausnummern;
 
     /**
      * @see HttpServlet#HttpServlet()
      */
-    public findjobs() {
+    public getMissingCountryJobs() {
         super();
         // TODO Auto-generated constructor stub
     }
@@ -83,63 +83,56 @@ public class findjobs extends HttpServlet {
 		try {
 			System.out.println("request komplett ===" + request.toString() + "===");
 			System.out.println("ok, in doPost angekommen ...");
+
+			String path = request.getServletContext().getRealPath("/WEB-INF");
+			System.out.println("path for/WEB-INF ===" + path + "===");
+			configuration = new Applicationconfiguration(path);
+			
 			MultipartMap map = new MultipartMap(request, this);
 
 			System.out.println("nach multipartmap in doPost ...");
 
 			String country = map.getParameter("country");
-			String municipality = map.getParameter("municipality");
-			if((municipality == null) || municipality.equals(""))
-				municipality = "*";
-			String jobname = map.getParameter("jobname");
-			if((jobname == null) || jobname.equals(""))
-				jobname = "*";
-			String officialkeys = map.getParameter("officialkeys");
-			if((officialkeys == null) || officialkeys.equals(""))
-				officialkeys = "*";
 
 			// Now do your thing with the obtained input.
 			System.out.println("=== original input parameters ===");
 			System.out.println(" country      ===" + country + "===");
-			System.out.println(" municipality ===" + municipality + "===");
-			System.out.println(" jobname ===" + jobname + "===");
-			System.out.println(" officialkeys ===" + officialkeys + "===");
 
 			country = country.replace("*", "%");
-			municipality = municipality.replace("*", "%");
-			jobname = jobname.replace("*", "%");
-			officialkeys = officialkeys.replace("*", "%");
 
 			System.out.println("=== changed input parameters for db ===");
 			System.out.println(" country      ===" + country + "===");
-			System.out.println(" municipality ===" + municipality + "===");
-			System.out.println(" jobname ===" + jobname + "===");
-			System.out.println(" officialkeys ===" + officialkeys + "===");
 
 			Class.forName("org.postgresql.Driver");
 	
 			String url_hausnummern = configuration.db_application_url;
 			con_hausnummern = DriverManager.getConnection(url_hausnummern, configuration.db_application_username, configuration.db_application_password);
 
+// query for all MAIN municipality (admin_level=7) missing jobs
+// select land, stadt, officialkeys_id, jobname, sub_id, osm_id * -1 from jobs, gebiete, stadt, land where jobs.gebiete_id = gebiete.id and gebiete.stadt_id = stadt.id and stadt.land_id = land.id and land = 'Poland' and admin_level = 7 and jobs.id not in (select distinct(j.id) from evaluations as e, jobs as j, gebiete as g, stadt as s where e.job_id = j.id and j.gebiete_id = g.id and g.stadt_id = s.id and s.land_id = 7);
+			
 			String select_sql = "SELECT land.id AS countryid, land,"
-				+ " stadt.id AS municipalityid, stadt,"
+				+ " stadt.id AS municipalityid, stadt, officialkeys_id, admin_level,"
 				+ " jobs.id AS jobid, jobname, osm_id, sub_id"
-				+ " FROM land, stadt, gebiete, jobs WHERE"
-				+ " officialkeys_id ilike ?"
-				+ " AND stadt ilike ?"
-				+ " AND land ilike ?"
-				+ " AND jobname ilike ?"
-				+ " AND stadt.land_id = land.id"
-				+ " AND gebiete.stadt_id = stadt.id"
+				+ " FROM jobs, gebiete, stadt, land"
+				+ " WHERE stadt.land_id = land.id AND"
+				+ " land = ?"
+				+ " AND jobs.stadt_id = stadt.id"
 				+ " AND jobs.gebiete_id = gebiete.id"
-				+ " ORDER BY land, stadt, jobname;";
+				+ " AND stadt.id NOT IN"
+				+ " (SELECT s.id FROM"
+				+ " evaluations AS e, jobs AS j, gebiete AS g, stadt AS s, land as l"
+				+ " WHERE e.job_id = j.id AND"
+				+ " j.gebiete_id = g.id AND"
+				+ " g.stadt_id = s.id AND"
+				+ " s.land_id = l.id AND"
+				+ " land = ?)"
+				+ " ORDER BY stadt, officialkeys_id, jobname;";
 
 			System.out.println("SQL-Query to find requested jobs for client ===" + select_sql + "===");
 			PreparedStatement selectqueryStmt = con_hausnummern.prepareStatement(select_sql);
-			selectqueryStmt.setString(1, officialkeys);
-			selectqueryStmt.setString(2, municipality);
-			selectqueryStmt.setString(3, country);
-			selectqueryStmt.setString(4, jobname);
+			selectqueryStmt.setString(1, country);
+			selectqueryStmt.setString(2, country);
 			ResultSet existingmunicipalityRS = selectqueryStmt.executeQuery();
 
 			StringBuffer dataoutput = new StringBuffer();
@@ -152,6 +145,8 @@ public class findjobs extends HttpServlet {
 				
 				actoutputline = existingmunicipalityRS.getString("land") + "\t"
 					+ existingmunicipalityRS.getString("stadt") + "\t"
+					+ existingmunicipalityRS.getString("officialkeys_id") + "\t"
+					+ existingmunicipalityRS.getInt("admin_level") + "\t"
 					+ existingmunicipalityRS.getString("jobname") + "\t"
 					+ existingmunicipalityRS.getString("sub_id") + "\t"
 					+ osm_id + "\n";
@@ -162,7 +157,7 @@ public class findjobs extends HttpServlet {
 			selectqueryStmt.close();
 			con_hausnummern.close();
 
-				// output Character Encoding MUST BE SET previously to response.getWriter to work !!!
+				// output Character Encoding MUST BE SET PREVIOUSLY to response.getWriter to work !!!
 			response.setContentType("text/plain;charset=UTF-8");
 			response.setHeader("Content-Encoding", "UTF-8");
 
