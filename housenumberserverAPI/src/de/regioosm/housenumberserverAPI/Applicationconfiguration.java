@@ -1,8 +1,11 @@
 package de.regioosm.housenumberserverAPI;
+import java.io.File;
 import java.io.FileReader;
 import java.io.Reader;
 import java.util.Properties;
 import java.util.logging.Level;
+
+import javax.servlet.http.HttpServlet;
 
 
 public class Applicationconfiguration {
@@ -25,13 +28,20 @@ public class Applicationconfiguration {
 	public Level logging_console_level = Level.FINEST;
 	public Level logging_file_level = Level.FINEST;
 	
-	public Applicationconfiguration () {
-			// get some configuration infos
-		String configuration_filename = "/home/openstreetmap/NASI/OSMshare/programme/git/housenumberserverAPI/housenumberserverAPI.properties";
-//		String configuration_filename = "/home/osm/apps/housenumberserverAPI/housenumberserverAPI.properties";
-System.out.println("configuration_filename ===" + configuration_filename+ "===");
 
-	try {
+	public Applicationconfiguration (String path) {
+		boolean debugoutput = false;
+
+		String configuration_filename = "";
+			// get some configuration infos
+		if(path.indexOf("org.eclipse.wst.server.core") == -1)
+			configuration_filename = path + File.separator + ".." + File.separator + ".." + File.separator + "housenumberserverAPI.properties";
+		else
+			configuration_filename = "/home/openstreetmap/NASI/OSMshare/programme/git/housenumberserverAPI/housenumberserverAPI.properties";
+		if(debugoutput)
+			System.out.println("configuration_filename ===" + configuration_filename+ "===");
+
+		try {
 			Reader reader = new FileReader( configuration_filename );
 			Properties prop = new Properties();
 			prop.load( reader );
@@ -75,23 +85,24 @@ System.out.println("configuration_filename ===" + configuration_filename+ "===")
 			if( prop.getProperty("logging_file_level") != null)
 				this.logging_file_level = Level.parse(prop.getProperty("logging_file_level"));
 
-			
-			System.out.println(" .servername                              ==="+this.servername+"===");
-			System.out.println(" .application_homedir                     ==="+this.application_homedir+"===");
-			System.out.println(" .application_datadir                     ==="+this.application_datadir+"===");
-			System.out.println(" .upload_homedir                          ==="+this.upload_homedir+"===");
-			System.out.println(" .db_application_url                      ==="+this.db_application_url+"===");
-			System.out.println(" .db_application_username                 ==="+this.db_application_username+"===");
-			System.out.println(" .db_application_password                 ==="+this.db_application_password+"===");
-			System.out.println(" .db_osm2pgsql_url                        ==="+this.db_osm2pgsql_url+"===");
-			System.out.println(" .db_osm2pgsql_username                   ==="+this.db_osm2pgsql_username+"===");
-			System.out.println(" .db_osm2pgsql_password                   ==="+this.db_osm2pgsql_password+"===");
-			System.out.println(" .db_osm2pgsqlwrite_username              ==="+this.db_osm2pgsqlwrite_username+"===");
-			System.out.println(" .db_osm2pgsqlwrite_password              ==="+this.db_osm2pgsqlwrite_password+"===");
-			System.out.println(" .osmosis_laststatefile                   ==="+this.osmosis_laststatefile+"===");
-			System.out.println(" .logging_filename                        ==="+this.logging_filename +"===");
-			System.out.println(" .logging_console_level                   ==="+this.logging_console_level.toString() +"===");
-			System.out.println(" .logging_file_level                      ==="+this.logging_file_level.toString() +"===");
+			if(debugoutput) {
+				System.out.println(" .servername                              ==="+this.servername+"===");
+				System.out.println(" .application_homedir                     ==="+this.application_homedir+"===");
+				System.out.println(" .application_datadir                     ==="+this.application_datadir+"===");
+				System.out.println(" .upload_homedir                          ==="+this.upload_homedir+"===");
+				System.out.println(" .db_application_url                      ==="+this.db_application_url+"===");
+				System.out.println(" .db_application_username                 ==="+this.db_application_username+"===");
+				System.out.println(" .db_application_password                 ==="+this.db_application_password+"===");
+				System.out.println(" .db_osm2pgsql_url                        ==="+this.db_osm2pgsql_url+"===");
+				System.out.println(" .db_osm2pgsql_username                   ==="+this.db_osm2pgsql_username+"===");
+				System.out.println(" .db_osm2pgsql_password                   ==="+this.db_osm2pgsql_password+"===");
+				System.out.println(" .db_osm2pgsqlwrite_username              ==="+this.db_osm2pgsqlwrite_username+"===");
+				System.out.println(" .db_osm2pgsqlwrite_password              ==="+this.db_osm2pgsqlwrite_password+"===");
+				System.out.println(" .osmosis_laststatefile                   ==="+this.osmosis_laststatefile+"===");
+				System.out.println(" .logging_filename                        ==="+this.logging_filename +"===");
+				System.out.println(" .logging_console_level                   ==="+this.logging_console_level.toString() +"===");
+				System.out.println(" .logging_file_level                      ==="+this.logging_file_level.toString() +"===");
+			}
 
 		} catch (Exception e) {
 			System.out.println("ERROR: failed to read file ==="+configuration_filename+"===");

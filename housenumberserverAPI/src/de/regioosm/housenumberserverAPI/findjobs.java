@@ -47,7 +47,7 @@ import net.balusc.http.multipart.MultipartMap;
 public class findjobs extends HttpServlet {
 	private static final long serialVersionUID = 1L;
 		// load content of configuration file, which contains filesystem entries and database connection details
-	static Applicationconfiguration configuration = new Applicationconfiguration();
+	static Applicationconfiguration configuration;
 	static Connection con_hausnummern;
 
     /**
@@ -80,9 +80,14 @@ public class findjobs extends HttpServlet {
 	 */
 	protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
 
+
 		try {
 			System.out.println("request komplett ===" + request.toString() + "===");
 			System.out.println("ok, in doPost angekommen ...");
+
+			String path = request.getServletContext().getRealPath("/WEB-INF");
+			configuration = new Applicationconfiguration(path);
+			
 			MultipartMap map = new MultipartMap(request, this);
 
 			System.out.println("nach multipartmap in doPost ...");
@@ -97,13 +102,6 @@ public class findjobs extends HttpServlet {
 			String officialkeys = map.getParameter("officialkeys");
 			if((officialkeys == null) || officialkeys.equals(""))
 				officialkeys = "*";
-
-			// Now do your thing with the obtained input.
-			System.out.println("=== original input parameters ===");
-			System.out.println(" country      ===" + country + "===");
-			System.out.println(" municipality ===" + municipality + "===");
-			System.out.println(" jobname ===" + jobname + "===");
-			System.out.println(" officialkeys ===" + officialkeys + "===");
 
 			country = country.replace("*", "%");
 			municipality = municipality.replace("*", "%");
@@ -132,7 +130,7 @@ public class findjobs extends HttpServlet {
 				+ " AND stadt.land_id = land.id"
 				+ " AND gebiete.stadt_id = stadt.id"
 				+ " AND jobs.gebiete_id = gebiete.id"
-				+ " ORDER BY land, stadt, jobname;";
+				+ " ORDER BY land, stadt, admin_level, jobname;";		// sort admin_level asc is important, so that main evaluation of a municipality will be make first
 
 			System.out.println("SQL-Query to find requested jobs for client ===" + select_sql + "===");
 			PreparedStatement selectqueryStmt = con_hausnummern.prepareStatement(select_sql);
