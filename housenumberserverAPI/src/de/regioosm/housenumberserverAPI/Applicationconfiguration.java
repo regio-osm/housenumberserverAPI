@@ -33,11 +33,16 @@ public class Applicationconfiguration {
 		boolean debugoutput = false;
 
 		String configuration_filename = "";
-			// get some configuration infos
-		if(path.indexOf("org.eclipse.wst.server.core") == -1)
-			configuration_filename = path + File.separator + ".." + File.separator + ".." + File.separator + "housenumberserverAPI.properties";
+
+		final String dir = System.getProperty("user.dir");
+		System.out.println("current dir = " + dir);
+		
+		// get some configuration infos
+		if(path.length() > 2)
+			configuration_filename =  path + File.separator + "housenumberserverAPI.properties";
 		else
-			configuration_filename = "/home/openstreetmap/NASI/OSMshare/programme/git/housenumberserverAPI/housenumberserverAPI.properties";
+			configuration_filename =  dir + File.separator + ".." + File.separator + "housenumberserverAPI.properties";
+
 		if(debugoutput)
 			System.out.println("configuration_filename ===" + configuration_filename+ "===");
 
