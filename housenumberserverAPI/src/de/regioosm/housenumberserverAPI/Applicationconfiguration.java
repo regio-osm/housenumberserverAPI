@@ -33,11 +33,20 @@ public class Applicationconfiguration {
 		boolean debugoutput = false;
 
 		String configuration_filename = "";
-			// get some configuration infos
-		if(path.indexOf("org.eclipse.wst.server.core") == -1)
-			configuration_filename = path + File.separator + ".." + File.separator + ".." + File.separator + "housenumberserverAPI.properties";
+
+		System.out.println("path to configuration file as method start ===" + path + "===");
+		String userdir = System.getProperty("user.dir");
+		System.out.println("current dir, is it good?   ===" + userdir);
+		
+		// get some configuration infos
+		if(userdir.indexOf("tomcat") != -1) {
+			configuration_filename =  userdir + File.separator + "webapps" + File.separator + "housenumberserverAPI.properties";
+			System.out.println("found tomcat in userdir");
+		} else if(path.length() > 2)
+			configuration_filename =  path + File.separator + "housenumberserverAPI.properties";
 		else
-			configuration_filename = "/home/openstreetmap/NASI/OSMshare/programme/git/housenumberserverAPI/housenumberserverAPI.properties";
+			configuration_filename =  userdir + File.separator + ".." + File.separator + "housenumberserverAPI.properties";
+
 		if(debugoutput)
 			System.out.println("configuration_filename ===" + configuration_filename+ "===");
 

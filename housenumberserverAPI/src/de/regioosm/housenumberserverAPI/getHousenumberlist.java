@@ -338,7 +338,7 @@ officialgeocoordinates = false;
 				// - the subadmin area is not given,
 				// - BUT geocoordinates are available for the official housenumbers (table stadt, column officialgeocoordinates, value = "y" new at 2015-02-09
 			if(officialgeocoordinates) {
-				sqlqueryofficialhousenumbers = "SELECT strasse, sh.hausnummer AS hausnummer,";
+				sqlqueryofficialhousenumbers = "SELECT strasse, postcode, sh.hausnummer AS hausnummer,";
 				sqlqueryofficialhousenumbers += " sh.hausnummer_sortierbar AS hausnummer_sortierbar,";
 				sqlqueryofficialhousenumbers += " strasse, sh.sub_id AS sub_id, ST_X(point) as lon, ST_Y(point) as lat, pointsource, hausnummer_bemerkung";
 				sqlqueryofficialhousenumbers += " FROM stadt_hausnummern AS sh,";
@@ -388,7 +388,7 @@ officialgeocoordinates = false;
 					listpreparedParameters += ", jobid='" + jobid + "'";
 				}
 			} else if(parameterAdminlevel <= 8) {
-				sqlqueryofficialhousenumbers = "SELECT strasse, sh.hausnummer AS hausnummer,";
+				sqlqueryofficialhousenumbers = "SELECT strasse, postcode, sh.hausnummer AS hausnummer,";
 				sqlqueryofficialhousenumbers += " sh.hausnummer_sortierbar AS hausnummer_sortierbar,";
 				sqlqueryofficialhousenumbers += " strasse, sub_id, ST_X(point) as lon, ST_Y(point) as lat, pointsource, hausnummer_bemerkung";
 				sqlqueryofficialhousenumbers += " FROM stadt_hausnummern AS sh,";
@@ -428,7 +428,7 @@ officialgeocoordinates = false;
 					// then the official list must be filtered with the table jobs_strassen, where all osm streets (places are missing there up to now)
 					// are found within the subadmin area osm polygon
 					// this is the select statement for the dynamically selection of the housenumber list
-				sqlqueryofficialhousenumbers = "SELECT strasse, sh.hausnummer AS hausnummer,"
+				sqlqueryofficialhousenumbers = "SELECT strasse, postcode, sh.hausnummer AS hausnummer,"
 					+ " sh.hausnummer_sortierbar AS hausnummer_sortierbar,"
 					+ " strasse, sub_id, ST_X(point) as lon, ST_Y(point) as lat, pointsource, hausnummer_bemerkung"
 					+ " FROM stadt_hausnummern AS sh"
@@ -504,7 +504,8 @@ System.out.println("row #" + rownumber);
 						+ "Housenumber" + fieldseparator
 						+ "LonLat" + fieldseparator
 						+ "LonLatSource" + fieldseparator
-						+ "HousenumberComment";
+						+ "HousenumberComment" + fieldseparator
+						+ "Postcode";
 					dataoutput.append(actoutputline + "\n");
 
 					dataoutput.append("#Para Country=" + country + "\n");
@@ -521,19 +522,23 @@ System.out.println("row #" + rownumber);
 				String lonlat = "";
 				String pointsource = "";
 				String housenumbercomment = "";
+				String postcode = "";
 				if(rsqueryofficialhousenumbers.getString("lon") != null)
 					lonlat = rsqueryofficialhousenumbers.getString("lon") + " " + rsqueryofficialhousenumbers.getString("lat");
 				if(rsqueryofficialhousenumbers.getString("pointsource") != null)
 					pointsource = rsqueryofficialhousenumbers.getString("pointsource");
 				if(rsqueryofficialhousenumbers.getString("hausnummer_bemerkung") != null)
 					housenumbercomment = rsqueryofficialhousenumbers.getString("hausnummer_bemerkung"); 
+				if(rsqueryofficialhousenumbers.getString("postcode") != null)
+					postcode = rsqueryofficialhousenumbers.getString("postcode"); 
 				
 				actoutputline = rsqueryofficialhousenumbers.getString("sub_id") + "\t"
 					+ rsqueryofficialhousenumbers.getString("strasse") + "\t"
 					+ rsqueryofficialhousenumbers.getString("hausnummer") + "\t"
 					+ lonlat + "\t"
 					+ pointsource + "\t"
-					+ housenumbercomment;
+					+ housenumbercomment + "\t"
+					+ postcode;
 				dataoutput.append(actoutputline + "\n");
 			}
 			requestEndtime = new java.util.Date();
