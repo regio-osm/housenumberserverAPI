@@ -146,7 +146,7 @@ public class batchImport {
 					}
 				}
 			}
-			
+
 			if(officialkeysId.equals(""))
 				officialkeysId = "%";
 
@@ -309,21 +309,21 @@ public class batchImport {
 
 			String inserthousenumberWithGeometrySql = "INSERT INTO auswertung_hausnummern"
 				+ " (land_id, stadt_id, job_id, copyland, copystadt, copyjobname, copystrasse,"
-				+ " strasse_id, hausnummer, hausnummer_sortierbar, treffertyp,"
+				+ " strasse_id, postcode, hausnummer, hausnummer_sortierbar, treffertyp,"
 				+ " osm_objektart, osm_id, objektart, point"
 				+ ")"
 				+ " VALUES(?, ?, ?, ?, ?, ?, ?,"
-				+ " ?, ?, ?, ?,"
+				+ " ?, ?, ?, ?, ?,"
 				+ " ?, ?, ?, ST_Setsrid(ST_Makepoint(?, ?), 4326));";
 			PreparedStatement inserthousenumberWithGeometryStmt = con_hausnummern.prepareStatement(inserthousenumberWithGeometrySql);
 
 			String inserthousenumberWithoutGeometrySql = "INSERT INTO auswertung_hausnummern"
 				+ " (land_id, stadt_id, job_id, copyland, copystadt, copyjobname, copystrasse,"
-				+ " strasse_id, hausnummer, hausnummer_sortierbar, treffertyp,"
+				+ " strasse_id, postcode, hausnummer, hausnummer_sortierbar, treffertyp,"
 				+ " osm_objektart, osm_id, objektart"
 				+ ")"
 				+ " VALUES(?, ?, ?, ?, ?, ?, ?,"
-				+ " ?, ?, ?, ?,"
+				+ " ?, ?, ?, ?, ?,"
 				+ " ?, ?, ?);";
 			PreparedStatement inserthousenumberWithoutGeometryStmt = con_hausnummern.prepareStatement(inserthousenumberWithoutGeometrySql);
 
@@ -407,6 +407,10 @@ public class batchImport {
 					field.put(headerfield.get(colindex), actcolumn);
 					//System.out.println("stored field[" + headerfield.get(colindex) + "] ===" + actcolumn + "===");
 				}
+
+				String actPostcode = "";
+				if(field.get("postcode") != null)
+					actPostcode = field.get("postcode");
 
 				actStreet = "";
 				if(field.get("strasse") != null)
@@ -560,12 +564,13 @@ public class batchImport {
 					inserthousenumberWithoutGeometryStmt.setString(6, jobname);
 					inserthousenumberWithoutGeometryStmt.setString(7, actStreet);
 					inserthousenumberWithoutGeometryStmt.setInt(8, street_idlist.get(actStreet));
-					inserthousenumberWithoutGeometryStmt.setString(9, acthousenumber); 
-					inserthousenumberWithoutGeometryStmt.setString(10, acthousenumbersorted);
-					inserthousenumberWithoutGeometryStmt.setString(11, acthittype);
-					inserthousenumberWithoutGeometryStmt.setString(12, actosmtype);  
-					inserthousenumberWithoutGeometryStmt.setLong(13, actosmid);
-					inserthousenumberWithoutGeometryStmt.setString(14, actosmtag);
+					inserthousenumberWithoutGeometryStmt.setString(9, actPostcode);
+					inserthousenumberWithoutGeometryStmt.setString(10, acthousenumber); 
+					inserthousenumberWithoutGeometryStmt.setString(11, acthousenumbersorted);
+					inserthousenumberWithoutGeometryStmt.setString(12, acthittype);
+					inserthousenumberWithoutGeometryStmt.setString(13, actosmtype);  
+					inserthousenumberWithoutGeometryStmt.setLong(14, actosmid);
+					inserthousenumberWithoutGeometryStmt.setString(15, actosmtag);
 					//System.out.println("insert_sql statement ===" + inserthousenumberWithoutGeometrySql + "===");
 					try {
 						inserthousenumberWithoutGeometryStmt.executeUpdate();
@@ -583,14 +588,15 @@ public class batchImport {
 					inserthousenumberWithGeometryStmt.setString(6, jobname);
 					inserthousenumberWithGeometryStmt.setString(7, actStreet);
 					inserthousenumberWithGeometryStmt.setInt(8, street_idlist.get(actStreet));
-					inserthousenumberWithGeometryStmt.setString(9, acthousenumber); 
-					inserthousenumberWithGeometryStmt.setString(10, acthousenumbersorted);
-					inserthousenumberWithGeometryStmt.setString(11, acthittype);
-					inserthousenumberWithGeometryStmt.setString(12, actosmtype);  
-					inserthousenumberWithGeometryStmt.setLong(13, actosmid);
-					inserthousenumberWithGeometryStmt.setString(14, actosmtag);
-					inserthousenumberWithGeometryStmt.setDouble(15, actlon);
-					inserthousenumberWithGeometryStmt.setDouble(16, actlat);
+					inserthousenumberWithGeometryStmt.setString(9, actPostcode);
+					inserthousenumberWithGeometryStmt.setString(10, acthousenumber); 
+					inserthousenumberWithGeometryStmt.setString(11, acthousenumbersorted);
+					inserthousenumberWithGeometryStmt.setString(12, acthittype);
+					inserthousenumberWithGeometryStmt.setString(13, actosmtype);  
+					inserthousenumberWithGeometryStmt.setLong(14, actosmid);
+					inserthousenumberWithGeometryStmt.setString(15, actosmtag);
+					inserthousenumberWithGeometryStmt.setDouble(16, actlon);
+					inserthousenumberWithGeometryStmt.setDouble(17, actlat);
 					
 					//System.out.println("insert_sql statement ===" + inserthousenumberWithGeometrySql + "===");
 					try {

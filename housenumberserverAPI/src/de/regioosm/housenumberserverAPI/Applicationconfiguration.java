@@ -34,14 +34,18 @@ public class Applicationconfiguration {
 
 		String configuration_filename = "";
 
-		final String dir = System.getProperty("user.dir");
-		System.out.println("current dir = " + dir);
+		System.out.println("path to configuration file as method start ===" + path + "===");
+		String userdir = System.getProperty("user.dir");
+		System.out.println("current dir, is it good?   ===" + userdir);
 		
 		// get some configuration infos
-		if(path.length() > 2)
+		if(userdir.indexOf("tomcat") != -1) {
+			configuration_filename =  userdir + File.separator + "webapps" + File.separator + "housenumberserverAPI.properties";
+			System.out.println("found tomcat in userdir");
+		} else if(path.length() > 2)
 			configuration_filename =  path + File.separator + "housenumberserverAPI.properties";
 		else
-			configuration_filename =  dir + File.separator + ".." + File.separator + "housenumberserverAPI.properties";
+			configuration_filename =  userdir + File.separator + ".." + File.separator + "housenumberserverAPI.properties";
 
 		if(debugoutput)
 			System.out.println("configuration_filename ===" + configuration_filename+ "===");
