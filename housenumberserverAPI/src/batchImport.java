@@ -760,7 +760,7 @@ public class batchImport {
 			System.out.println("-importeddir directory");
 			return;
 		}
-		
+
 		if (args.length >= 1) {
 			int argsOkCount = 0;
 			for (int argsi = 0; argsi < args.length; argsi += 2) {
