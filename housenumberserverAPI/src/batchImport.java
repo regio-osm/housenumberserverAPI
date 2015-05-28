@@ -1,10 +1,14 @@
 
 
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
+import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -12,6 +16,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
+import java.text.DateFormat;
 import java.util.*;
 
 import de.regioosm.housenumberserverAPI.Applicationconfiguration;
@@ -102,6 +107,7 @@ public class batchImport {
 			String jobname = "";
 			String officialkeysId = "";
 			Integer adminlevel = 0;
+			String serverobjectId = "";
 			String polygonAsText = "";
 			Integer polygonSrid = 0;
 
@@ -142,6 +148,9 @@ public class batchImport {
 						}
 						if(key.equals("Officialkeysid")) {
 							officialkeysId = value;
+						}
+						if(key.equals("Serverobjectid")) {
+							serverobjectId = value;
 						}
 					}
 				}
@@ -226,7 +235,8 @@ public class batchImport {
 			String deletelastevaluationSql = "DELETE FROM auswertung_hausnummern"
 				+ " WHERE land_id = ? AND stadt_id = ? AND job_id = ?;";
 			PreparedStatement deletelastevaluationStmt = con_hausnummern.prepareStatement(deletelastevaluationSql);
-			System.out.println("Info: delete old evaluation in table auswertung_hausnummern ...");
+			System.out.println("Info: delete old evaluation in table auswertung_hausnummern ===" + deletelastevaluationSql 
+					+ "=== with parameters 1 ===" + countryid + "===, 2 ===" + municipalityid + "===, 3 ===" + jobid + "===...");
 			try {
 				deletelastevaluationStmt.setInt(1, countryid);
 				deletelastevaluationStmt.setInt(2, municipalityid);
@@ -710,6 +720,31 @@ public class batchImport {
 				e.printStackTrace();
 			}
 
+				// if job is from jobqueue table, then update state of job
+			if(!serverobjectId.equals("")) {
+				System.out.println("after response stream closed now work on available serverobjectId ===" + serverobjectId + "===");
+				if(serverobjectId.indexOf("jobqueue:") == 0) {
+					String serverobjectId_parts[] = serverobjectId.split(":");
+					if(serverobjectId_parts.length == 2) {
+						String updateJobqueueSql = "UPDATE jobqueue set state = 'finished'";
+						updateJobqueueSql += " WHERE";
+						updateJobqueueSql += " id = ? AND";
+						updateJobqueueSql += " state = 'uploaded';";
+						updateJobqueueSql += ";";
+						PreparedStatement updateJobqueueStmt = con_hausnummern.prepareStatement(updateJobqueueSql);
+						updateJobqueueStmt.setLong(1, Long.parseLong(serverobjectId_parts[1]));
+						updateJobqueueStmt.executeUpdate();
+					} else {
+						System.out.println("Error in getHousenumberlist: unknown structure in Serverobjectid, id complete ===" + serverobjectId + "===, will be ignored");
+					}
+				} else {
+					System.out.println("Warning in getHousenumberlist: unknown serverobjectId Prefix, id complete ===" + serverobjectId + "===, will be ignored");
+				}
+				System.out.println("after response end of work on available serverobjectId ===" + serverobjectId + "===");
+			}
+			
+			
+			
 			System.out.println("Info: start transaction commit ...");
 			java.util.Date commitstart = new java.util.Date();
 			con_hausnummern.commit();
@@ -783,10 +818,22 @@ public class batchImport {
 			}
 		}
 		
-		
+		DateFormat dateformat = DateFormat.getDateTimeInstance();
+
 		
 		String filename = "";
+		String importworkPathandFilename = resultfiles_uploadpath + File.separator + "batchimport.active";
+		String importworkoutputline = "";
 		try {
+			File importworkPathandFilenameHandle = new File(importworkPathandFilename);
+			if(importworkPathandFilenameHandle.exists() && !importworkPathandFilenameHandle.isDirectory()) {
+				System.out.println("Batchimport already active, stopp processign of this program");
+				return;
+			}
+			PrintWriter workprogressOutput = new PrintWriter(new BufferedWriter(new OutputStreamWriter(
+					new FileOutputStream(importworkPathandFilename, true),StandardCharsets.UTF_8)));
+			workprogressOutput.println("Start of batchimport: " + dateformat.format(new Date()));
+			workprogressOutput.close();
 
 			File dir_filestructure = new File(resultfiles_uploadpath);
 
@@ -809,6 +856,7 @@ public class batchImport {
 							System.out.println("actual file entry is FILE and .result ==="+actualFilename+"=== (subcall starts...) in directory ===" 
 								+ resultfiles_uploadpath + "===   complete path ===" + resultfiles_uploadpath + File.separator
 								+ actualFilename.substring(0,actualFilename.lastIndexOf("."))+"===");
+							importworkoutputline = actualFilename + "\t" + dateformat.format(new Date()) + "\t";
 
 							BufferedReader filereader = new BufferedReader(new InputStreamReader(new FileInputStream(actual_filehandle.getAbsoluteFile()),StandardCharsets.UTF_8));
 							String fileline = "";
@@ -825,11 +873,25 @@ public class batchImport {
 								String destinationFilename = resultfiles_importedpath + File.separator + actualFilename;
 								File destinationFilenameHandle = new File(destinationFilename);
 								actual_filehandle.renameTo(destinationFilenameHandle);
+								importworkoutputline += dateformat.format(new Date()) + "\t" + "successful";
+							} else {
+								importworkoutputline += dateformat.format(new Date()) + "\t" + "failed";
 							}
 						}
 					}
+					workprogressOutput = new PrintWriter(new BufferedWriter(new OutputStreamWriter(
+							new FileOutputStream(importworkPathandFilename, true),StandardCharsets.UTF_8)));
+					workprogressOutput.println(importworkoutputline);
+					workprogressOutput.close();
+
 				}
 			} // end of for-loop over actual path
+			if(importworkPathandFilenameHandle.exists() && !importworkPathandFilenameHandle.isDirectory()) {
+				String destinationworkPathandFilename = resultfiles_uploadpath + File.separator + "batchimport.finished";
+				File destinationworkPathandFilenameHandle = new File(destinationworkPathandFilename);
+				importworkPathandFilenameHandle.renameTo(destinationworkPathandFilenameHandle);
+				System.out.println("Batchimport progress file renamed to finish-state");
+			}
 		} catch (IOException ioerror) {
 			System.out.println("ERORR: IOException happened, details follows ...");
 			System.out.println(" .. couldn't open file to write, filename was ===" + filename + "===");
