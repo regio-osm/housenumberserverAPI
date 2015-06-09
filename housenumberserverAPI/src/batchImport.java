@@ -726,7 +726,7 @@ public class batchImport {
 				if(serverobjectId.indexOf("jobqueue:") == 0) {
 					String serverobjectId_parts[] = serverobjectId.split(":");
 					if(serverobjectId_parts.length == 2) {
-						String updateJobqueueSql = "UPDATE jobqueue set state = 'finished'";
+						String updateJobqueueSql = "UPDATE jobqueue set state = 'finished', finishedtime = now()";
 						updateJobqueueSql += " WHERE";
 						updateJobqueueSql += " id = ? AND";
 						updateJobqueueSql += " state = 'uploaded';";
