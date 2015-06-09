@@ -140,15 +140,17 @@ public class getHousenumberlist extends HttpServlet {
 			Integer parameterAdminlevel = Integer.parseInt(URLDecoder.decode(request.getParameter("adminlevel"),"UTF-8"));
 			String parameterJobname = URLDecoder.decode(request.getParameter("jobname"),"UTF-8");
 			String parameterSubid = URLDecoder.decode(request.getParameter("subid"),"UTF-8");
-			 
+			String parameterServerobjectid = URLDecoder.decode(request.getParameter("serverobjectid"),"UTF-8");
+
 			
 			System.out.println("=== input parameters for db without decoding ===");
-			System.out.println(" country        ===" + parameterCountry + "===");
-			System.out.println(" municipality   ===" + parameterMunicipality + "===");
-			System.out.println(" officialkeysid ===" + parameterOfficialkeysid + "===");
-			System.out.println(" adminlevel     ===" + parameterAdminlevel + "===");
-			System.out.println(" jobname        ===" + parameterJobname + "===");
-			System.out.println(" subid          ===" + parameterSubid + "===");
+			System.out.println(" country                 ===" + parameterCountry + "===");
+			System.out.println(" municipality            ===" + parameterMunicipality + "===");
+			System.out.println(" officialkeysid          ===" + parameterOfficialkeysid + "===");
+			System.out.println(" adminlevel              ===" + parameterAdminlevel + "===");
+			System.out.println(" jobname                 ===" + parameterJobname + "===");
+			System.out.println(" subid      	         ===" + parameterSubid + "===");
+			System.out.println(" parameterServerobjectid ===" + parameterServerobjectid + "===");
 
 			System.out.println(" request encoding ===" + request.getCharacterEncoding());
 			
@@ -548,7 +550,6 @@ System.out.println("row #" + rownumber);
 			System.out.println("Number of housenumbers: " + rownumber);
 
 			queryofficialhousenumbersStmt.close();
-			con_hausnummern.close();
 
 			
 			
@@ -559,6 +560,32 @@ System.out.println("row #" + rownumber);
 			PrintWriter writer = response.getWriter();
 			writer.println(dataoutput.toString());
 			writer.close();
+
+				// if job is from jobqueue table, then update state of job
+			if(!parameterServerobjectid.equals("")) {
+				System.out.println("after response stream closed now work on available serverobjectid ===" + parameterServerobjectid + "===");
+				if(parameterServerobjectid.indexOf("jobqueue:") == 0) {
+					String serverobjectid_parts[] = parameterServerobjectid.split(":");
+					if(serverobjectid_parts.length == 2) {
+						String updateJobqueueSql = "UPDATE jobqueue set state = 'started'";
+						updateJobqueueSql += " WHERE";
+						updateJobqueueSql += " id = ? AND";
+						updateJobqueueSql += " state = 'open';";
+						updateJobqueueSql += ";";
+						PreparedStatement updateJobqueueStmt = con_hausnummern.prepareStatement(updateJobqueueSql);
+						updateJobqueueStmt.setLong(1, Long.parseLong(serverobjectid_parts[1]));
+						updateJobqueueStmt.executeUpdate();
+					} else {
+						System.out.println("Error in getHousenumberlist: unknown structure in Serverobjectid, id complete ===" + parameterServerobjectid + "===, will be ignored");
+					}
+				} else {
+					System.out.println("Warning in getHousenumberlist: unknown Serverobjectid Prefix, id complete ===" + parameterServerobjectid + "===, will be ignored");
+				}
+				System.out.println("after response end of work on available serverobjectid ===" + parameterServerobjectid + "===");
+			}
+		
+			con_hausnummern.close();
+		
 		} // end of try to connect to DB and operate with DB
 		catch(ClassNotFoundException e) {
 			e.printStackTrace();

@@ -112,6 +112,7 @@ public class Upload extends HttpServlet {
 			String municipality = map.getParameter("Municipality");
 			String officialkeysId = map.getParameter("Officialkeysid");
 			String jobname = map.getParameter("Jobname");
+			String serverobjectid = map.getParameter("Serverobjectid");
 			File file = map.getFile("result");
 			System.out.println("temporary file ===" + file.getAbsoluteFile() + "===");
 
@@ -196,6 +197,38 @@ public class Upload extends HttpServlet {
 			writer.println("</html>");
 				
 			writer.close();
+
+		
+			
+				// if job is from jobqueue table, then update state of job
+			if(!serverobjectid.equals("")) {
+				System.out.println("after response stream closed now work on available serverobjectid ===" + serverobjectid + "===");
+				Class.forName("org.postgresql.Driver");
+				String url_hausnummern = configuration.db_application_url;
+				con_hausnummern = DriverManager.getConnection(url_hausnummern, configuration.db_application_username, configuration.db_application_password);
+				if(serverobjectid.indexOf("jobqueue:") == 0) {
+					String serverobjectid_parts[] = serverobjectid.split(":");
+					if(serverobjectid_parts.length == 2) {
+						String updateJobqueueSql = "UPDATE jobqueue set state = 'uploaded'";
+						updateJobqueueSql += " WHERE";
+						updateJobqueueSql += " id = ? AND";
+						updateJobqueueSql += " state = 'started';";
+						updateJobqueueSql += ";";
+						PreparedStatement updateJobqueueStmt = con_hausnummern.prepareStatement(updateJobqueueSql);
+						updateJobqueueStmt.setLong(1, Long.parseLong(serverobjectid_parts[1]));
+						System.out.println("Info in getHousenumberlist: parameter id ===" + Long.parseLong(serverobjectid_parts[1])+ "===");
+						updateJobqueueStmt.executeUpdate();
+					} else {
+						System.out.println("Error in getHousenumberlist: unknown structure in Serverobjectid, id complete ===" + serverobjectid + "===, will be ignored");
+					}
+				} else {
+					System.out.println("Warning in getHousenumberlist: unknown Serverobjectid Prefix, id complete ===" + serverobjectid + "===, will be ignored");
+				}
+				con_hausnummern.close();
+				System.out.println("end of work on available serverobjectid ===" + serverobjectid + "===");
+			}
+		
+		
 		} catch (IOException ioerror) {
 			System.out.println("ERORR: IOException happened, details follows ...");
 			System.out.println(" .. couldn't open file to write, filename was ===" + filename + "===");
@@ -221,6 +254,26 @@ public class Upload extends HttpServlet {
 			writer.println("<body>");
 			writer.println("</html>");
 			writer.close();
+		}
+		catch(ClassNotFoundException e) {
+			e.printStackTrace();
+			System.exit(1);
+		}
+		catch( SQLException e) {
+			e.printStackTrace();
+			try {
+				con_hausnummern.close();
+			} catch( SQLException innere) {
+				System.out.println("inner sql-exception (tried to to close connection ...");
+				innere.printStackTrace();
+			}
+			PrintWriter writer = response.getWriter();
+			response.setContentType("text/plain; charset=utf-8");
+			response.setHeader("Accept",  "400");
+			writer.println("SQLException happened, details follows ...");
+			writer.println(e.toString());
+			writer.close();
+			return;
 		}
 	}
 }

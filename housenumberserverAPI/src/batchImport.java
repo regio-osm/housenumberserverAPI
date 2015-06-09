@@ -107,6 +107,7 @@ public class batchImport {
 			String jobname = "";
 			String officialkeysId = "";
 			Integer adminlevel = 0;
+			String serverobjectId = "";
 			String polygonAsText = "";
 			Integer polygonSrid = 0;
 
@@ -147,6 +148,9 @@ public class batchImport {
 						}
 						if(key.equals("Officialkeysid")) {
 							officialkeysId = value;
+						}
+						if(key.equals("Serverobjectid")) {
+							serverobjectId = value;
 						}
 					}
 				}
@@ -716,6 +720,31 @@ public class batchImport {
 				e.printStackTrace();
 			}
 
+				// if job is from jobqueue table, then update state of job
+			if(!serverobjectId.equals("")) {
+				System.out.println("after response stream closed now work on available serverobjectId ===" + serverobjectId + "===");
+				if(serverobjectId.indexOf("jobqueue:") == 0) {
+					String serverobjectId_parts[] = serverobjectId.split(":");
+					if(serverobjectId_parts.length == 2) {
+						String updateJobqueueSql = "UPDATE jobqueue set state = 'finished'";
+						updateJobqueueSql += " WHERE";
+						updateJobqueueSql += " id = ? AND";
+						updateJobqueueSql += " state = 'uploaded';";
+						updateJobqueueSql += ";";
+						PreparedStatement updateJobqueueStmt = con_hausnummern.prepareStatement(updateJobqueueSql);
+						updateJobqueueStmt.setLong(1, Long.parseLong(serverobjectId_parts[1]));
+						updateJobqueueStmt.executeUpdate();
+					} else {
+						System.out.println("Error in getHousenumberlist: unknown structure in Serverobjectid, id complete ===" + serverobjectId + "===, will be ignored");
+					}
+				} else {
+					System.out.println("Warning in getHousenumberlist: unknown serverobjectId Prefix, id complete ===" + serverobjectId + "===, will be ignored");
+				}
+				System.out.println("after response end of work on available serverobjectId ===" + serverobjectId + "===");
+			}
+			
+			
+			
 			System.out.println("Info: start transaction commit ...");
 			java.util.Date commitstart = new java.util.Date();
 			con_hausnummern.commit();
