@@ -127,12 +127,12 @@ public class getHousenumberlist extends HttpServlet {
 		java.util.Date requestEndtime;
 
 		try {
+			System.out.println("Beginn getHousenumberlist/doPost ...");
 			System.out.println("request komplett ===" + request.toString() + "===");
-			System.out.println("ok, in doPost angekommen ...");
 
 			String path = request.getServletContext().getRealPath("/WEB-INF");
 			configuration = new Applicationconfiguration(path);
-			System.out.println("ok, nach ende setzen configuraiton");
+			System.out.println("ok, nach ende setzen configuration");
 
 			String parameterCountry = URLDecoder.decode(request.getParameter("country"),"UTF-8");
 			String parameterMunicipality = URLDecoder.decode(request.getParameter("municipality"),"UTF-8");
@@ -267,6 +267,7 @@ public class getHousenumberlist extends HttpServlet {
 				PrintWriter writer = response.getWriter();
 				writer.println(errormessage);
 				writer.close();
+				System.out.println("Ende getHousenumberlist/doPost!");
 				return;
 			}
 			
@@ -585,6 +586,7 @@ System.out.println("row #" + rownumber);
 			}
 		
 			con_hausnummern.close();
+			System.out.println("Ende getHousenumberlist/doPost!");
 		
 		} // end of try to connect to DB and operate with DB
 		catch(ClassNotFoundException e) {
