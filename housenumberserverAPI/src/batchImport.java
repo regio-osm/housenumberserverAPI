@@ -123,8 +123,12 @@ public class batchImport {
 				if(actline.indexOf("#") == 0) {
 					if(actline.indexOf("#Para ") == 0) {
 						String keyvalue[] = actline.substring(6).split("=");
-						String key = keyvalue[0];
-						String value = keyvalue[1];
+						String key = "";
+						String value = "";
+						if(keyvalue.length >= 1)
+							key = keyvalue[0];
+						if(keyvalue.length >= 2)
+							value = keyvalue[1];
 						System.out.println("Info: found comment line with parameter [" + key + "] ===" + value + "===");
 	
 						if(key.equals("OSMTime")) {
@@ -312,8 +316,8 @@ public class batchImport {
 
 			String insertStreetResultSql = "INSERT INTO exporthnr2shape"
 				+ " (land_id, stadt_id, job_id, strasse, hnr_soll, hnr_osm,"
-				+ " hnr_fhlosm, hnr_nurosm, hnr_abdeck, hnr_liste, geom)"
-				+ " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ST_Transform(?::geometry, 4326)"
+				+ " hnr_fhlosm, hnr_nurosm, hnr_abdeck, hnr_liste, timestamp, geom)"
+				+ " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, now(), ST_Transform(?::geometry, 4326)"
 				+ ");";
 			PreparedStatement insertStreetResultStmt = con_hausnummern.prepareStatement(insertStreetResultSql);
 
@@ -382,9 +386,12 @@ public class batchImport {
 				if(actline.indexOf("#") == 0) {
 					if(actline.indexOf("#Para ") == 0) {
 						String keyvalue[] = actline.substring(6).split("=");
-						String key = keyvalue[0];
-						String value = keyvalue[1];
-
+						String key = "";
+						String value = "";
+						if(keyvalue.length >= 1)
+							key = keyvalue[0];
+						if(keyvalue.length >= 2)
+							value = keyvalue[1];
 						if(key.equals("OSMTime")) {
 							osmtime = new java.util.Date(Long.parseLong(value));
 						}
@@ -675,7 +682,8 @@ public class batchImport {
 					EvaluationResultMapSql = "UPDATE exportjobs2shape"
 						+ " SET stadtbezrk = ?, hnr_soll = ?, hnr_osm = ?,"
 						+ " hnr_fhlosm = ?, hnr_nurosm = ?, hnr_abdeck = ?,"
-						+ " polygon = ST_Transform(ST_Geomfromtext(?, ?), 4326)"
+						+ " polygon = ST_Transform(ST_Geomfromtext(?, ?), 4326),"
+						+ " timestamp = now()"
 						+ " WHERE land_id = ? AND stadt_id = ? AND job_id = ?;";
 					PreparedStatement updateEvaluationResultMapStmt = con_hausnummern.prepareStatement(EvaluationResultMapSql);
 					updateEvaluationResultMapStmt.setString(1, jobname);
@@ -694,8 +702,8 @@ public class batchImport {
 				} else {
 					EvaluationResultMapSql = "INSERT INTO exportjobs2shape"
 						+ " (land_id, stadt_id, job_id, stadtbezrk, hnr_soll, hnr_osm,"
-						+ " hnr_fhlosm, hnr_nurosm,hnr_abdeck,polygon)"
-						+ " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ST_Transform(ST_Geomfromtext(?, ?), 4326));";
+						+ " hnr_fhlosm, hnr_nurosm, timestamp, hnr_abdeck,polygon)"
+						+ " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, now(), ST_Transform(ST_Geomfromtext(?, ?), 4326));";
 					PreparedStatement insertEvaluationResultMapStmt = con_hausnummern.prepareStatement(EvaluationResultMapSql);
 					insertEvaluationResultMapStmt.setInt(1, countryid);
 					insertEvaluationResultMapStmt.setInt(2, municipalityid);
