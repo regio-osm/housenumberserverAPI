@@ -499,7 +499,6 @@ officialgeocoordinates = false;
 			while(rsqueryofficialhousenumbers.next()) {
 				rownumber++;
 				String actoutputline = "";
-System.out.println("row #" + rownumber);
 				if(rownumber == 1) {
 					actoutputline = "#" 
 						+ "Subadminarea" + fieldseparator
