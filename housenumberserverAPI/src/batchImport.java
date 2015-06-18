@@ -702,7 +702,7 @@ public class batchImport {
 				} else {
 					EvaluationResultMapSql = "INSERT INTO exportjobs2shape"
 						+ " (land_id, stadt_id, job_id, stadtbezrk, hnr_soll, hnr_osm,"
-						+ " hnr_fhlosm, hnr_nurosm, timestamp, hnr_abdeck,polygon)"
+						+ " hnr_fhlosm, hnr_nurosm, hnr_abdeck, timestamp, polygon)"
 						+ " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, now(), ST_Transform(ST_Geomfromtext(?, ?), 4326));";
 					PreparedStatement insertEvaluationResultMapStmt = con_hausnummern.prepareStatement(EvaluationResultMapSql);
 					insertEvaluationResultMapStmt.setInt(1, countryid);

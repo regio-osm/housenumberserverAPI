@@ -122,7 +122,7 @@ public class getQueueJobs extends HttpServlet {
 				select_queuejobssql += " (requestreason = 'instant')";
 			}
 			select_queuejobssql += ")"
-				+ " ORDER BY priority DESC, scheduletime, requesttime"
+				+ " ORDER BY scheduletime, requesttime, priority DESC"
 				+ " LIMIT ?;";
 
 			System.out.println("SQL-Query to get jobs from queue ===" + select_queuejobssql + "===");
@@ -170,7 +170,7 @@ public class getQueueJobs extends HttpServlet {
 					actvalue = queuejobsqueryRS.getString("jobname");
 					actvalue = actvalue.replace("*","%");
 				}
-				selectqueryStmt.setString(4, actvalue);
+				selectqueryStmt.setString(3, actvalue);
 				existingpreparedParameters += ", jobname='" + actvalue + "'";
 				System.out.println("existing muni query: Parameters " + existingpreparedParameters + "     ===" + select_sql + "===");
 				existingmunicipalityRS = selectqueryStmt.executeQuery();
