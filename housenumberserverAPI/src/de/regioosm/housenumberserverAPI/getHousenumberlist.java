@@ -66,6 +66,8 @@ import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
+import org.postgresql.util.PSQLException;
+
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -499,7 +501,6 @@ officialgeocoordinates = false;
 			while(rsqueryofficialhousenumbers.next()) {
 				rownumber++;
 				String actoutputline = "";
-System.out.println("row #" + rownumber);
 				if(rownumber == 1) {
 					actoutputline = "#" 
 						+ "Subadminarea" + fieldseparator
@@ -593,17 +594,36 @@ System.out.println("row #" + rownumber);
 			e.printStackTrace();
 			System.exit(1);
 		}
+		catch( PSQLException psqle) {
+			System.out.println("Error: PSQLException happened, Details follows ...");
+			System.out.println(psqle.toString());
+			try {
+				con_hausnummern.close();
+			} catch( SQLException innere) {
+				System.out.println("inner PSQLexception (tried to to close connection ...");
+				innere.printStackTrace();
+			}
+			response.setContentType("text/plain; charset=utf-8");
+			response.sendError(432, "OSM-Data Error");
+			PrintWriter writer = response.getWriter();
+			writer.println("PSQLException happened, details follows ...");
+			writer.println(psqle.toString());
+			writer.close();
+			return;
+		}
 		catch( SQLException e) {
-			e.printStackTrace();
+			System.out.println("Error: SQLException happened, Details follows ...");
+			System.out.println(e.toString());
 			try {
 				con_hausnummern.close();
 			} catch( SQLException innere) {
 				System.out.println("inner sql-exception (tried to to close connection ...");
 				innere.printStackTrace();
 			}
-			PrintWriter writer = response.getWriter();
 			response.setContentType("text/plain; charset=utf-8");
-			response.setHeader("Accept",  "400");
+			response.sendError(431, "Database Error");
+			PrintWriter writer = response.getWriter();
+			//response.setHeader("Database Error",  "430");
 			writer.println("SQLException happened, details follows ...");
 			writer.println(e.toString());
 			writer.close();
@@ -612,9 +632,9 @@ System.out.println("row #" + rownumber);
 		catch( OutOfMemoryError memoryerror) {
 			System.out.println("OutOfMemoryError exception happened, details follow ...");
 			memoryerror.printStackTrace();
-			PrintWriter writer = response.getWriter();
 			response.setContentType("text/plain; charset=utf-8");
-			response.setHeader("Accept",  "400");
+			response.sendError(430, "Server Application Problem");
+			PrintWriter writer = response.getWriter();
 			writer.println("SQLException happened, details follows ...");
 			writer.println(memoryerror.toString());
 			writer.close();
