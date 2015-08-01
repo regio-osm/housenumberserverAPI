@@ -231,6 +231,7 @@ public class getQueueJobs extends HttpServlet {
 			System.exit(1);
 		}
 		catch( SQLException e) {
+			System.out.println("SQLException happened, details follows ...");
 			e.printStackTrace();
 			try {
 				con_hausnummern.close();
