@@ -411,7 +411,7 @@ public class batchImport {
 					continue;
 				}
 				String columns[] = actline.split("\t");
-				if(columns.length < 9) {
+				if(columns.length < 8) {
 					System.out.println("Error: file line contains to less columns, will be ignored. line no.: " + lineindex + "  line content ===" + actline + "===");
 					continue;
 				}
