@@ -88,6 +88,8 @@ public class batchImport {
      */
     private static boolean insertResultIntoDB(String content) {
 		java.util.Date insertResultIntoDBouter = new java.util.Date();
+java.util.Date stepstarttime = new java.util.Date();
+java.util.Date stependtime = new java.util.Date();
 
 		java.util.Date evaluationtime = null;
 		java.util.Date osmtime = null;
@@ -168,8 +170,9 @@ public class batchImport {
 			String url_hausnummern = configuration.db_application_url;
 			con_hausnummern = DriverManager.getConnection(url_hausnummern, configuration.db_application_username, configuration.db_application_password);
 
+stepstarttime = new java.util.Date();
 			System.out.println("beginn von insertfkt");
-			
+
 			String select_sql = "SELECT land.id AS countryid, land,"
 				+ " stadt.id AS municipalityid, stadt, officialkeys_id, admin_level,"
 				+ " ST_AsText(polygon) AS polygon_astext, ST_SRID(polygon) AS polygon_srid,"
@@ -212,6 +215,9 @@ public class batchImport {
 				moreThanOneRowContent.append(country + "," + municipality + "," + existingmunicipalityRS.getString("officialkeys_id") 
 					+ "," + existingmunicipalityRS.getInt("admin_level") + "," + jobname + "\n");
 			}
+stependtime = new Date();
+System.out.println("time after 1 select: " + (stependtime.getTime() - stepstarttime.getTime()) + "    sind fkt-start: " + (stependtime.getTime() - insertResultIntoDBouter.getTime()));
+stepstarttime = new Date();
 
 			if(countHits > 1) {
 				System.out.println("Error: more than one related jobs were found, CANCEL import ...");
@@ -252,6 +258,9 @@ public class batchImport {
 				e.printStackTrace();
 			}
 			deletelastevaluationStmt.close();
+stependtime = new Date();
+System.out.println("time after 2 delete ah: " + (stependtime.getTime() - stepstarttime.getTime()) + "    sind fkt-start: " + (stependtime.getTime() - insertResultIntoDBouter.getTime()));
+stepstarttime = new Date();
 
 				// delete all job entries in exporthnr2shape
 			String deleteLastEvaluationMapResultsql = "DELETE FROM exporthnr2shape";
@@ -268,6 +277,9 @@ public class batchImport {
 				e.printStackTrace();
 			}
 			deleteLastEvaluationMapResultStmt.close();
+stependtime = new Date();
+System.out.println("time after 3 delete exporthnr2shape: " + (stependtime.getTime() - stepstarttime.getTime()) + "    sind fkt-start: " + (stependtime.getTime() - insertResultIntoDBouter.getTime()));
+stepstarttime = new Date();
 
 			String selectallofficialstreetsSql = "SELECT DISTINCT ON (strasse) strasse, strasse.id AS id"
 				+ " FROM stadt_hausnummern, strasse, stadt, land"
@@ -297,6 +309,9 @@ public class batchImport {
 				e.printStackTrace();
 			}
 			selectallofficialstreetsStmt.close();
+stependtime = new Date();
+System.out.println("time after 4 getofficialstreets: " + (stependtime.getTime() - stepstarttime.getTime()) + "    sind fkt-start: " + (stependtime.getTime() - insertResultIntoDBouter.getTime()));
+stepstarttime = new Date();
 			
 
 			String selectStreetidSql = "SELECT id FROM strasse where strasse = ?;";
@@ -306,7 +321,10 @@ public class batchImport {
 			PreparedStatement insertstreetstmt = con_hausnummern.prepareStatement(insertstreetsql);
 
 			String selectOSMStreetGeometrySql = "SELECT strasse_id AS id, strasse, jobs_strassen.linestring AS linestring900913,"
-				+ " osm_ids, ST_IsClosed(jobs_strassen.linestring) AS linestring_isclosed"
+				+ " osm_ids, ST_IsClosed(jobs_strassen.linestring) AS linestring_isclosed,"
++ "  osm_ids AS osm_strassen_ids,"
++ "  ST_X(ST_Transform(ST_ClosestPoint(jobs_strassen.linestring,ST_Centroid(jobs_strassen.linestring)),4326)) AS lon,"
++ "  ST_Y(ST_Transform(ST_ClosestPoint(jobs_strassen.linestring,ST_Centroid(jobs_strassen.linestring)),4326)) AS lat"
 				+ " FROM jobs_strassen JOIN strasse"
 				+ "   ON jobs_strassen.strasse_id = strasse.id"
 				+ " WHERE job_id = ? AND"
@@ -324,21 +342,25 @@ public class batchImport {
 			String inserthousenumberWithGeometrySql = "INSERT INTO auswertung_hausnummern"
 				+ " (land_id, stadt_id, job_id, copyland, copystadt, copyjobname, copystrasse,"
 				+ " strasse_id, postcode, hausnummer, hausnummer_sortierbar, treffertyp,"
-				+ " osm_objektart, osm_id, objektart, point"
+				+ " osm_objektart, osm_id, objektart, point,"
+				+ " street_osmids, street_point"
 				+ ")"
 				+ " VALUES(?, ?, ?, ?, ?, ?, ?,"
 				+ " ?, ?, ?, ?, ?,"
-				+ " ?, ?, ?, ST_Setsrid(ST_Makepoint(?, ?), 4326));";
+				+ " ?, ?, ?, ST_Setsrid(ST_Makepoint(?, ?), 4326),"
+				+ " ?, ST_Setsrid(ST_Makepoint(?, ?), 4326));";
 			PreparedStatement inserthousenumberWithGeometryStmt = con_hausnummern.prepareStatement(inserthousenumberWithGeometrySql);
 
 			String inserthousenumberWithoutGeometrySql = "INSERT INTO auswertung_hausnummern"
 				+ " (land_id, stadt_id, job_id, copyland, copystadt, copyjobname, copystrasse,"
 				+ " strasse_id, postcode, hausnummer, hausnummer_sortierbar, treffertyp,"
-				+ " osm_objektart, osm_id, objektart"
+				+ " osm_objektart, osm_id, objektart,"
+				+ " street_osmids, street_point"
 				+ ")"
 				+ " VALUES(?, ?, ?, ?, ?, ?, ?,"
 				+ " ?, ?, ?, ?, ?,"
-				+ " ?, ?, ?);";
+				+ " ?, ?, ?,"
+				+ " ?, ST_Setsrid(ST_Makepoint(?, ?), 4326));";
 			PreparedStatement inserthousenumberWithoutGeometryStmt = con_hausnummern.prepareStatement(inserthousenumberWithoutGeometrySql);
 
 			
@@ -355,11 +377,27 @@ public class batchImport {
 			String previousStreet = "";
 			StringBuffer actStreetMissingHousenumbers = new StringBuffer();
 
+				// buffer osm metadata and geometry at begin of street for all following housenumbers
+			ResultSet selectOSMStreetGeometryRS = null;
+			Long actosmstreet_dbid = -1L;
+			String actosmstreet_linestring900913 = null;
+			String actosmstreet_osmids = "";
+			Double actosmstreet_lon = 0.0D;
+			Double actosmstreet_lat = 0.0D;
+
 				// loop over all result file lines
 			int countHousenumbersIdentical = 0;
 			int countHousenumbersListonly = 0;
 			int countHousenumbersOsmonly = 0;
 			java.util.Date loopstart = new java.util.Date();
+Date tmpstart = new Date();
+Date tmpend = new Date();
+Long selectstreetsmsec = 0L;
+Long insertexporthrn2shapemsec = 0L;
+Long inserhnrwithgeommsec = 0L;
+Long inserhnrwithoutgeommsec = 0L;
+Integer countselecstreets = 0;
+Integer countinsertexporthrn2shape = 0;
 			for(int lineindex = 0; lineindex < lines.length; lineindex++) {
 				previousStreet = actStreet;
 
@@ -474,6 +512,8 @@ public class batchImport {
 				//System.out.println("actlon ===" + actlon + "===    actlat ===" + actlat + "===");
 
 				if(! street_idlist.containsKey(actStreet)) {
+tmpstart = new Date();
+countselecstreets++;
 					selectStreetidStmt.setString(1, actStreet);
 					System.out.println("query for street ===" + actStreet + "=== ...");
 					ResultSet selstreetRS = selectStreetidStmt.executeQuery();
@@ -496,18 +536,18 @@ public class batchImport {
 							System.out.println(e.toString());
 						}
 					}
+tmpend = new Date();
+selectstreetsmsec += (tmpend.getTime() - tmpstart.getTime());
 				}
 
-				if(! previousStreet.equals(actStreet) && ! previousStreet.equals("")) {
-					selectOSMStreetGeometryStmt.setInt(1, jobid);
-					selectOSMStreetGeometryStmt.setInt(2, street_idlist.get(previousStreet));
-					try {
-						Integer insertStreetResultParameterIndex = 1;
-						ResultSet selectOSMStreetGeometryRS = selectOSMStreetGeometryStmt.executeQuery();
-						if(selectOSMStreetGeometryRS.next()) {
-
+				if(! previousStreet.equals(actStreet)) {
+tmpstart = new Date();
+countinsertexporthrn2shape++;
+					if(! previousStreet.equals("")) {
+						if(actosmstreet_dbid != -1L) {
+							Integer insertStreetResultParameterIndex = 1;
 							String insertStreetResultParameters = "";
-							if (selectOSMStreetGeometryRS.getString("linestring900913") != null) {
+							if (actosmstreet_linestring900913 != null) {
 								insertStreetResultStmt.setLong(insertStreetResultParameterIndex++, countryid);
 								insertStreetResultParameters += "land_id=" + countryid;
 								insertStreetResultStmt.setLong(insertStreetResultParameterIndex++, municipalityid);
@@ -533,7 +573,7 @@ public class batchImport {
 
 								insertStreetResultStmt.setString(insertStreetResultParameterIndex++, actStreetMissingHousenumbers.toString());
 								insertStreetResultParameters += ", hnr_liste=" + actStreetMissingHousenumbers.toString();
-								insertStreetResultStmt.setString(insertStreetResultParameterIndex++, selectOSMStreetGeometryRS.getString("linestring900913"));
+								insertStreetResultStmt.setString(insertStreetResultParameterIndex++, actosmstreet_linestring900913);
 								insertStreetResultParameters += ", geometry= ...";
 								//System.out.println("insert evaluation result parameters ===" + insertStreetResultParameters + "===,  statement ===" + insertStreetResultSql + "===");
 								try {
@@ -544,8 +584,26 @@ public class batchImport {
 									e.printStackTrace();
 								}
 							} else {
-								System.out.println("WARNUNG: leeres Polygon in jobs_strassen id: " + selectOSMStreetGeometryRS.getLong("id"));
+								System.out.println("WARNUNG: leeres Polygon in jobs_strassen id: " + actosmstreet_dbid);
 							}
+						}
+					} // end of not-first street and store result previous street as summary
+					selectOSMStreetGeometryStmt.setInt(1, jobid);
+					selectOSMStreetGeometryStmt.setInt(2, street_idlist.get(actStreet));
+					try {
+						selectOSMStreetGeometryRS = selectOSMStreetGeometryStmt.executeQuery();
+						if(selectOSMStreetGeometryRS.next()) {
+							actosmstreet_dbid = selectOSMStreetGeometryRS.getLong("id");
+							actosmstreet_linestring900913 = selectOSMStreetGeometryRS.getString("linestring900913");
+							actosmstreet_osmids = selectOSMStreetGeometryRS.getString("osm_strassen_ids");
+							actosmstreet_lon = selectOSMStreetGeometryRS.getDouble("lon");
+							actosmstreet_lat = selectOSMStreetGeometryRS.getDouble("lat");
+						} else {
+							actosmstreet_dbid = -1L;
+							actosmstreet_linestring900913 = null;
+							actosmstreet_osmids = "";
+							actosmstreet_lon = 0.0D;
+							actosmstreet_lat = 0.0D;
 						}
 					}
 					catch( SQLException e) {
@@ -556,6 +614,8 @@ public class batchImport {
 					street_hittype_i = 0;
 					street_hittype_l = 0;
 					street_hittype_o = 0;
+tmpend = new Date();
+insertexporthrn2shapemsec += (tmpend.getTime() - tmpstart.getTime());
 				}
 
 				if(acthittype.equals("i")) {
@@ -588,9 +648,15 @@ public class batchImport {
 					inserthousenumberWithoutGeometryStmt.setString(13, actosmtype);  
 					inserthousenumberWithoutGeometryStmt.setLong(14, actosmid);
 					inserthousenumberWithoutGeometryStmt.setString(15, actosmtag);
+inserthousenumberWithoutGeometryStmt.setString(16, actosmstreet_osmids);
+inserthousenumberWithoutGeometryStmt.setDouble(17, actosmstreet_lon);
+inserthousenumberWithoutGeometryStmt.setDouble(18, actosmstreet_lat);
 					//System.out.println("insert_sql statement ===" + inserthousenumberWithoutGeometrySql + "===");
 					try {
+tmpstart = new Date();
 						inserthousenumberWithoutGeometryStmt.executeUpdate();
+tmpend = new Date();
+inserhnrwithoutgeommsec += (tmpend.getTime() - tmpstart.getTime());
 					}
 					catch( SQLException e) {
 						System.out.println("ERROR: during insert in table auswertung_hausnummern, insert code was ===" + inserthousenumberWithoutGeometrySql + "===");
@@ -614,10 +680,16 @@ public class batchImport {
 					inserthousenumberWithGeometryStmt.setString(15, actosmtag);
 					inserthousenumberWithGeometryStmt.setDouble(16, actlon);
 					inserthousenumberWithGeometryStmt.setDouble(17, actlat);
+inserthousenumberWithGeometryStmt.setString(18, actosmstreet_osmids);
+inserthousenumberWithGeometryStmt.setDouble(19, actosmstreet_lon);
+inserthousenumberWithGeometryStmt.setDouble(20, actosmstreet_lat);
 					
 					//System.out.println("insert_sql statement ===" + inserthousenumberWithGeometrySql + "===");
 					try {
+tmpstart = new Date();
 						inserthousenumberWithGeometryStmt.executeUpdate();
+tmpend = new Date();
+inserhnrwithgeommsec += (tmpend.getTime() - tmpstart.getTime());
 					}
 					catch( SQLException e) {
 						System.out.println("ERROR: during insert in table auswertung_hausnummern, insert code was ===" + inserthousenumberWithGeometrySql + "===");
@@ -627,6 +699,14 @@ public class batchImport {
 			} // end of loop over all content lines
 			java.util.Date loopend = new java.util.Date();
 			System.out.println("time for loop in sek: " + (loopend.getTime() - loopstart.getTime())/1000);
+stependtime = new Date();
+System.out.println("time after 5 loopalllines: " + (loopend.getTime() - loopstart.getTime()) + "    sind fkt-start: " + (loopend.getTime() - insertResultIntoDBouter.getTime()));
+stepstarttime = new Date();
+System.out.println("  - time only selectunknownstreets      in msec: " + selectstreetsmsec + "   count: " + countselecstreets);
+System.out.println("  - time only insertexporthrn2shapemsec in msec: " + insertexporthrn2shapemsec + "   count: " + countinsertexporthrn2shape);
+System.out.println("  - time only inserhnrwithgeommsec      in msec: " + inserhnrwithgeommsec);
+System.out.println("  - time only inserhnrwithoutgeommsec   in msec: " + inserhnrwithoutgeommsec);
+
 
 			selectStreetidStmt.close();
 			inserthousenumberWithGeometryStmt.close();
@@ -664,6 +744,9 @@ public class batchImport {
 				e.printStackTrace();
 			}
 			insertEvaluationResultStmt.close();
+stependtime = new Date();
+System.out.println("time after 6 insereval: " + (stependtime.getTime() - stepstarttime.getTime()) + "    sind fkt-start: " + (stependtime.getTime() - insertResultIntoDBouter.getTime()));
+stepstarttime = new Date();
 
 			String EvaluationResultMapSql = "SELECT id FROM exportjobs2shape"
 				+ " WHERE land_id = ? AND stadt_id = ? AND job_id = ?;";
@@ -727,6 +810,9 @@ public class batchImport {
 				System.out.println("ERROR: during select result overview map entry, select code was ===" + EvaluationResultMapSql + "===");
 				e.printStackTrace();
 			}
+stependtime = new Date();
+System.out.println("time after 7 exportjobs2shape: " + (stependtime.getTime() - stepstarttime.getTime()) + "    sind fkt-start: " + (stependtime.getTime() - insertResultIntoDBouter.getTime()));
+stepstarttime = new Date();
 
 				// if job is from jobqueue table, then update state of job
 			if(!serverobjectId.equals("")) {
@@ -761,6 +847,9 @@ public class batchImport {
 			System.out.println("Info: finished transaction commit ...");
 
 			selectqueryStmt.close();
+stependtime = new Date();
+System.out.println("time after 8 committ: " + (stependtime.getTime() - stepstarttime.getTime()) + "    sind fkt-start: " + (stependtime.getTime() - insertResultIntoDBouter.getTime()));
+stepstarttime = new Date();
 
 			con_hausnummern.close();
 
@@ -835,8 +924,21 @@ public class batchImport {
 		try {
 			File importworkPathandFilenameHandle = new File(importworkPathandFilename);
 			if(importworkPathandFilenameHandle.exists() && !importworkPathandFilenameHandle.isDirectory()) {
-				System.out.println("Batchimport already active, stopp processign of this program");
-				return;
+				Long filedate_milliseconds = importworkPathandFilenameHandle.lastModified();
+				Long nowdate_milliseconds = new Date().getTime();
+				System.out.println("filedate_msec ===" + filedate_milliseconds + "===");
+				System.out.println("nowdate msec  ===" + nowdate_milliseconds + "===");
+				System.out.println("diff now minus filedate msec ===" + (nowdate_milliseconds - filedate_milliseconds));
+				System.out.println("diff now minus filedate sec ===" + (nowdate_milliseconds - filedate_milliseconds)/1000);
+				Long maxtimeAssumeSystemWorks_milliseconds = (long) (30 * 60 * 1000);		// 30 minutes
+				if((nowdate_milliseconds - filedate_milliseconds) > maxtimeAssumeSystemWorks_milliseconds) {
+					System.out.println("Batchimport active File found, but to old (in sec: " + ((nowdate_milliseconds - filedate_milliseconds)/1000) + "), it will be deleted");
+					importworkPathandFilenameHandle.delete();
+					importworkPathandFilenameHandle = new File(importworkPathandFilename);
+				} else {
+					System.out.println("Batchimport already active, stopp processign of this program. Filename: " + importworkPathandFilenameHandle + "   file age in sec: " + (nowdate_milliseconds - filedate_milliseconds)/1000);
+					return;
+				}
 			}
 			PrintWriter workprogressOutput = new PrintWriter(new BufferedWriter(new OutputStreamWriter(
 					new FileOutputStream(importworkPathandFilename, true),StandardCharsets.UTF_8)));

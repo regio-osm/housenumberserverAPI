@@ -129,7 +129,9 @@ public class getHousenumberlist extends HttpServlet {
 		java.util.Date requestEndtime;
 
 		try {
-			System.out.println("Beginn getHousenumberlist/doPost ...");
+			requestStarttime = new java.util.Date();
+
+			System.out.println("Beginn getHousenumberlist/doPost at " + requestStarttime.toString() + " ...");
 			System.out.println("request komplett ===" + request.toString() + "===");
 
 			String path = request.getServletContext().getRealPath("/WEB-INF");
@@ -213,7 +215,6 @@ public class getHousenumberlist extends HttpServlet {
 			}
 			System.out.println("municipality query: Parameters " + munipreparedParameters + "     ===" + selectMunicipalitySql + "===");
 
-			requestStarttime = new java.util.Date();
 
 			ResultSet selectMunicipalityRS = selectMunicipalityStmt.executeQuery();
 
@@ -251,6 +252,8 @@ public class getHousenumberlist extends HttpServlet {
 				if(selectMunicipalityRS.getString("municipality_jobname") != null)
 					municipalityJobname = selectMunicipalityRS.getString("municipality_jobname");
 			}
+			System.out.println("municipalityJobId ===" + municipalityJobId + "===");
+			System.out.println("municipalityJobname ===" + municipalityJobname + "===");
 			selectMunicipalityStmt.close();
 			requestEndtime = new java.util.Date();
 			System.out.println("time for query for municipality in sec: " + (requestEndtime.getTime() - requestStarttime.getTime())/1000);
@@ -269,7 +272,8 @@ public class getHousenumberlist extends HttpServlet {
 				PrintWriter writer = response.getWriter();
 				writer.println(errormessage);
 				writer.close();
-				System.out.println("Ende getHousenumberlist/doPost!");
+				System.out.println("Ende getHousenumberlist/doPost at " + requestEndtime.toString() 
+					+ ",   Duration was " + (requestEndtime.getTime() - requestStarttime.getTime())+ " ms !");
 				return;
 			}
 			
