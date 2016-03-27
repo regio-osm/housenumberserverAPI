@@ -15,6 +15,7 @@ import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.Date;
 
 import net.balusc.http.multipart.MultipartMap;
 
@@ -81,6 +82,7 @@ public class getMissingCountryJobs extends HttpServlet {
 	protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
 
 		try {
+			System.out.println("\nBeginn getMissingCountryJobs/doPost ... " + new Date());
 			System.out.println("request komplett ===" + request.toString() + "===");
 			System.out.println("ok, in doPost angekommen ...");
 
@@ -111,7 +113,7 @@ public class getMissingCountryJobs extends HttpServlet {
 // query for all MAIN municipality (admin_level=7) missing jobs
 // select land, stadt, officialkeys_id, jobname, sub_id, osm_id * -1 from jobs, gebiete, stadt, land where jobs.gebiete_id = gebiete.id and gebiete.stadt_id = stadt.id and stadt.land_id = land.id and land = 'Poland' and admin_level = 7 and jobs.id not in (select distinct(j.id) from evaluations as e, jobs as j, gebiete as g, stadt as s where e.job_id = j.id and j.gebiete_id = g.id and g.stadt_id = s.id and s.land_id = 7);
 			
-			String select_sql = "SELECT land.id AS countryid, land,"
+			String select_sql = "SELECT land.id AS countryid, land, countrycode,"
 				+ " stadt.id AS municipalityid, stadt, officialkeys_id, admin_level,"
 				+ " jobs.id AS jobid, jobname, osm_id, sub_id"
 				+ " FROM jobs, gebiete, stadt, land"
@@ -136,14 +138,19 @@ public class getMissingCountryJobs extends HttpServlet {
 			ResultSet existingmunicipalityRS = selectqueryStmt.executeQuery();
 
 			StringBuffer dataoutput = new StringBuffer();
+			String actoutputline = "";
+
+			actoutputline = "#" + "Country\tCountrycode\tMunicipality\tMunicipality-Id\tAdmin-Level"
+				+ "\tJobname\tSubarea-Id\tOSM-Relation-Id\n";
+			dataoutput.append(actoutputline);
 
 			while(existingmunicipalityRS.next()) {
-				String actoutputline = "";
 				Long osm_id = existingmunicipalityRS.getLong("osm_id");
 				if(osm_id < 0)
 					osm_id = Math.abs(osm_id);
 				
 				actoutputline = existingmunicipalityRS.getString("land") + "\t"
+					+ existingmunicipalityRS.getString("countrycode") + "\t"
 					+ existingmunicipalityRS.getString("stadt") + "\t"
 					+ existingmunicipalityRS.getString("officialkeys_id") + "\t"
 					+ existingmunicipalityRS.getInt("admin_level") + "\t"
