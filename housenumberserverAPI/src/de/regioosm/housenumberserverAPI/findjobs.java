@@ -15,6 +15,7 @@ import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.Date;
 
 import net.balusc.http.multipart.MultipartMap;
 
@@ -82,8 +83,8 @@ public class findjobs extends HttpServlet {
 
 
 		try {
-			System.out.println("request komplett ===" + request.toString() + "===");
-			System.out.println("ok, in doPost angekommen ...");
+			System.out.println("\nBegin findjobs/doPost ... " + new Date());
+			System.out.println("request completely ===" + request.toString() + "===");
 
 			String path = request.getServletContext().getRealPath("/WEB-INF");
 			configuration = new Applicationconfiguration(path);
@@ -119,7 +120,7 @@ public class findjobs extends HttpServlet {
 			String url_hausnummern = configuration.db_application_url;
 			con_hausnummern = DriverManager.getConnection(url_hausnummern, configuration.db_application_username, configuration.db_application_password);
 
-			String select_sql = "SELECT land.id AS countryid, land,"
+			String select_sql = "SELECT land.id AS countryid, land, countrycode,"
 				+ " stadt.id AS municipalityid, stadt, officialkeys_id, admin_level,"
 				+ " jobs.id AS jobid, jobname, osm_id, sub_id"
 				+ " FROM land, stadt, gebiete, jobs WHERE"
@@ -141,14 +142,19 @@ public class findjobs extends HttpServlet {
 			ResultSet existingmunicipalityRS = selectqueryStmt.executeQuery();
 
 			StringBuffer dataoutput = new StringBuffer();
+			String actoutputline = "";
 
+			actoutputline = "#" + "Country\tCountrycode\tMunicipality\tMunicipality-Id\tAdmin-Level"
+				+ "\tJobname\tSubarea-Id\tOSM-Relation-Id\n";
+			dataoutput.append(actoutputline);
+			
 			while(existingmunicipalityRS.next()) {
-				String actoutputline = "";
 				Long osm_id = existingmunicipalityRS.getLong("osm_id");
 				if(osm_id < 0)
 					osm_id = Math.abs(osm_id);
 				
 				actoutputline = existingmunicipalityRS.getString("land") + "\t"
+					+ existingmunicipalityRS.getString("countrycode") + "\t"
 					+ existingmunicipalityRS.getString("stadt") + "\t"
 					+ existingmunicipalityRS.getString("officialkeys_id") + "\t"
 					+ existingmunicipalityRS.getInt("admin_level") + "\t"

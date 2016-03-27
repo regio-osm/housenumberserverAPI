@@ -60,6 +60,7 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.net.URLDecoder;
 
+import javax.servlet.ServletConfig;
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
@@ -73,6 +74,7 @@ import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.Date;
 
 import net.balusc.http.multipart.MultipartMap;
 
@@ -103,6 +105,50 @@ public class getHousenumberlist extends HttpServlet {
     }
 
     
+    /**
+     * initialization on servlett startup
+     */
+    public void 	init(ServletConfig config) {
+    	System.out.println("\n\nok, servlet " + config.getServletName() + " will be initialized now ...\n");
+
+		String path = config.getServletContext().getRealPath("/WEB-INF");
+		configuration = new Applicationconfiguration(path);
+
+		try {
+			Class.forName("org.postgresql.Driver");
+			
+			String url_hausnummern = configuration.db_application_url;
+			con_hausnummern = DriverManager.getConnection(url_hausnummern, configuration.db_application_username, configuration.db_application_password);
+		} 
+		catch(ClassNotFoundException e) {
+			e.printStackTrace();
+			System.exit(1);
+		}
+		catch( SQLException e) {
+			System.out.println("SQLException happened within init(), details follows ...");
+			System.out.println(e.toString());
+			return;
+		}    
+	}
+
+    /**
+     * destroy at aned of servlett life
+     */
+    public void 	destroy(){
+    	System.out.println("\n\nok, servlet will be destroyed now ...\n");
+
+    	try {
+    		con_hausnummern.close();
+			System.out.println("after closed DB-Connection");
+    	}
+		catch( SQLException e) {
+			System.out.println("SQLException happened within init(), details follows ...");
+			System.out.println(e.toString());
+			return;
+		}    
+    }
+
+
 	/**
 	 * @see HttpServlet#doGet(HttpServletRequest request, HttpServletResponse response)
 	 */
@@ -129,12 +175,10 @@ public class getHousenumberlist extends HttpServlet {
 		java.util.Date requestEndtime;
 
 		try {
-			System.out.println("Beginn getHousenumberlist/doPost ...");
-			System.out.println("request komplett ===" + request.toString() + "===");
+			requestStarttime = new java.util.Date();
 
-			String path = request.getServletContext().getRealPath("/WEB-INF");
-			configuration = new Applicationconfiguration(path);
-			System.out.println("ok, nach ende setzen configuration");
+			System.out.println("\n\nBeginn getHousenumberlist/doPost at " + requestStarttime.toString() + " ...");
+			System.out.println("request komplett ===" + request.toString() + "===");
 
 			String parameterCountry = URLDecoder.decode(request.getParameter("country"),"UTF-8");
 			String parameterMunicipality = URLDecoder.decode(request.getParameter("municipality"),"UTF-8");
@@ -156,12 +200,6 @@ public class getHousenumberlist extends HttpServlet {
 
 			System.out.println(" request encoding ===" + request.getCharacterEncoding());
 			
-			  
-			  
-			Class.forName("org.postgresql.Driver");
-	
-			String url_hausnummern = configuration.db_application_url;
-			con_hausnummern = DriverManager.getConnection(url_hausnummern, configuration.db_application_username, configuration.db_application_password);
 
 			String selectMunicipalitySql = "SELECT land, stadt, s.id as stadt_id, osm_hierarchy, officialkeys_id,";
 			selectMunicipalitySql += " sourcelist_url, sourcelist_copyrighttext, sourcelist_useagetext,";
@@ -189,10 +227,9 @@ public class getHousenumberlist extends HttpServlet {
 			if(! parameterOfficialkeysid.equals(""))
 				selectMunicipalitySql += " AND officialkeys_id = ?";
 			selectMunicipalitySql += ";";
+
 			PreparedStatement selectMunicipalityStmt = con_hausnummern.prepareStatement(selectMunicipalitySql);
 
-			
-			
 			int preparedmuniindex = 1;
 			String munipreparedParameters = "";
 			selectMunicipalityStmt.setString(preparedmuniindex++, parameterCountry);
@@ -213,7 +250,6 @@ public class getHousenumberlist extends HttpServlet {
 			}
 			System.out.println("municipality query: Parameters " + munipreparedParameters + "     ===" + selectMunicipalitySql + "===");
 
-			requestStarttime = new java.util.Date();
 
 			ResultSet selectMunicipalityRS = selectMunicipalityStmt.executeQuery();
 
@@ -251,6 +287,8 @@ public class getHousenumberlist extends HttpServlet {
 				if(selectMunicipalityRS.getString("municipality_jobname") != null)
 					municipalityJobname = selectMunicipalityRS.getString("municipality_jobname");
 			}
+			System.out.println("municipalityJobId ===" + municipalityJobId + "===");
+			System.out.println("municipalityJobname ===" + municipalityJobname + "===");
 			selectMunicipalityStmt.close();
 			requestEndtime = new java.util.Date();
 			System.out.println("time for query for municipality in sec: " + (requestEndtime.getTime() - requestStarttime.getTime())/1000);
@@ -259,7 +297,6 @@ public class getHousenumberlist extends HttpServlet {
 				String errormessage = "Error: Number of municipalities, that fit to requested municipality '" + municipality
 					+ "' in country '" + country + "' were more than one, so housenumber list can't be delivered";
 				System.out.println(errormessage);
-				con_hausnummern.close();
 				
 					// output Character Encoding MUST BE SET previously to response.getWriter to work !!!
 				response.setContentType("text/plain;charset=UTF-8");
@@ -269,7 +306,8 @@ public class getHousenumberlist extends HttpServlet {
 				PrintWriter writer = response.getWriter();
 				writer.println(errormessage);
 				writer.close();
-				System.out.println("Ende getHousenumberlist/doPost!");
+				System.out.println("Ende getHousenumberlist/doPost at " + requestEndtime.toString() 
+					+ ",   Duration was " + (requestEndtime.getTime() - requestStarttime.getTime())+ " ms !");
 				return;
 			}
 			
@@ -334,7 +372,7 @@ public class getHousenumberlist extends HttpServlet {
 			PreparedStatement queryofficialhousenumbersStmt;
 
 	// is not in production, because Tomcat heap size exception and algorithm not finished completely
-officialgeocoordinates = false;	
+//officialgeocoordinates = false;
 
 			int preparedindex = 1;
 			String listpreparedParameters = "";
@@ -367,7 +405,7 @@ officialgeocoordinates = false;
 				sqlqueryofficialhousenumbers += " g.stadt_id = s.id AND";
 				sqlqueryofficialhousenumbers += " ST_Within(point,?::geometry)";
 				if(parameterAdminlevel > 8) {
-					sqlqueryofficialhousenumbers += " AND job_id = ?";
+					sqlqueryofficialhousenumbers += " AND j.id = ?";
 				}
 				sqlqueryofficialhousenumbers += " ORDER BY correctorder(strasse), hausnummer_sortierbar;";
 
@@ -381,6 +419,8 @@ officialgeocoordinates = false;
 					queryofficialhousenumbersStmt.setString(preparedindex++, officialkeysid);
 					listpreparedParameters += ", officialkeysid='" + officialkeysid + "'";
 				}
+				queryofficialhousenumbersStmt.setLong(preparedindex++, jobid);
+				listpreparedParameters += ", jobid='" + jobid + "'";
 				if(! parameterSubid.equals("-1")) {
 					queryofficialhousenumbersStmt.setString(preparedindex++, parameterSubid);
 //check, if sub_id or job_id must be used here
@@ -586,23 +626,12 @@ officialgeocoordinates = false;
 				System.out.println("after response end of work on available serverobjectid ===" + parameterServerobjectid + "===");
 			}
 		
-			con_hausnummern.close();
-			System.out.println("Ende getHousenumberlist/doPost!");
+			System.out.println("\nEnde getHousenumberlist/doPost at " + new Date());
 		
 		} // end of try to connect to DB and operate with DB
-		catch(ClassNotFoundException e) {
-			e.printStackTrace();
-			System.exit(1);
-		}
 		catch( PSQLException psqle) {
 			System.out.println("Error: PSQLException happened, Details follows ...");
 			System.out.println(psqle.toString());
-			try {
-				con_hausnummern.close();
-			} catch( SQLException innere) {
-				System.out.println("inner PSQLexception (tried to to close connection ...");
-				innere.printStackTrace();
-			}
 			response.setContentType("text/plain; charset=utf-8");
 			response.sendError(432, "OSM-Data Error");
 			PrintWriter writer = response.getWriter();
@@ -614,12 +643,6 @@ officialgeocoordinates = false;
 		catch( SQLException e) {
 			System.out.println("Error: SQLException happened, Details follows ...");
 			System.out.println(e.toString());
-			try {
-				con_hausnummern.close();
-			} catch( SQLException innere) {
-				System.out.println("inner sql-exception (tried to to close connection ...");
-				innere.printStackTrace();
-			}
 			response.setContentType("text/plain; charset=utf-8");
 			response.sendError(431, "Database Error");
 			PrintWriter writer = response.getWriter();

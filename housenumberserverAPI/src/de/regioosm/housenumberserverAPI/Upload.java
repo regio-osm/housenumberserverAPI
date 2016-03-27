@@ -73,6 +73,50 @@ public class Upload extends HttpServlet {
     }
 
 
+    /**
+     * initialization on servlett startup
+     */
+    public void 	init(ServletConfig config) {
+    	System.out.println("\n\nok, servlet " + config.getServletName() + " will be initialized now ...\n");
+
+		String path = config.getServletContext().getRealPath("/WEB-INF");
+		configuration = new Applicationconfiguration(path);
+
+		try {
+		Class.forName("org.postgresql.Driver");
+		
+		String url_hausnummern = configuration.db_application_url;
+		con_hausnummern = DriverManager.getConnection(url_hausnummern, configuration.db_application_username, configuration.db_application_password);
+		} 
+		catch(ClassNotFoundException e) {
+			e.printStackTrace();
+			System.exit(1);
+		}
+		catch( SQLException e) {
+			System.out.println("SQLException happened within init(), details follows ...");
+			System.out.println(e.toString());
+			return;
+		}    
+	}
+
+    /**
+     * destroy at aned of servlett life
+     */
+    public void 	destroy(){
+    	System.out.println("\n\nok, servlet will be destroyed now ...\n");
+
+    	try {
+    		con_hausnummern.close();
+			System.out.println("after closed DB-Connection");
+    	}
+		catch( SQLException e) {
+			System.out.println("SQLException happened within init(), details follows ...");
+			System.out.println(e.toString());
+			return;
+		}    
+    }
+
+    
 
 	/**
 	 * @see HttpServlet#doGet(HttpServletRequest request, HttpServletResponse response)
@@ -100,11 +144,10 @@ public class Upload extends HttpServlet {
 		Integer linenumbers = 0;
 		Long uploadlength = 0L;
 		try {
-			System.out.println("request kompletto ===" + request.toString() + "===");
+			System.out.println("\nBegin Upload/doPost ... " + new Date());
+			System.out.println("request completely ===" + request.toString() + "===");
 			System.out.println("ok, in doPost angekommen ...");
 
-			String path = request.getServletContext().getRealPath("/WEB-INF");
-			configuration = new Applicationconfiguration(path);
 
 			MultipartMap map = new MultipartMap(request, this);
 
@@ -161,7 +204,7 @@ public class Upload extends HttpServlet {
 			writer.println("	<h1>Upload.java!</h1>");
 
 
-			DateFormat time_formatter = new SimpleDateFormat("yyyyMMdd-HHmmssZ");
+			DateFormat time_formatter = new SimpleDateFormat("yyyyMMdd-HHmmss-SZ");
 			String uploadtime = time_formatter.format(new Date());
 
 			filename += configuration.upload_homedir + File.separator + "open";
@@ -203,9 +246,6 @@ public class Upload extends HttpServlet {
 				// if job is from jobqueue table, then update state of job
 			if(!serverobjectid.equals("")) {
 				System.out.println("after response stream closed now work on available serverobjectid ===" + serverobjectid + "===");
-				Class.forName("org.postgresql.Driver");
-				String url_hausnummern = configuration.db_application_url;
-				con_hausnummern = DriverManager.getConnection(url_hausnummern, configuration.db_application_username, configuration.db_application_password);
 				if(serverobjectid.indexOf("jobqueue:") == 0) {
 					String serverobjectid_parts[] = serverobjectid.split(":");
 					if(serverobjectid_parts.length == 2) {
@@ -224,7 +264,6 @@ public class Upload extends HttpServlet {
 				} else {
 					System.out.println("Warning in getHousenumberlist: unknown Serverobjectid Prefix, id complete ===" + serverobjectid + "===, will be ignored");
 				}
-				con_hausnummern.close();
 				System.out.println("end of work on available serverobjectid ===" + serverobjectid + "===");
 			}
 		
@@ -255,18 +294,8 @@ public class Upload extends HttpServlet {
 			writer.println("</html>");
 			writer.close();
 		}
-		catch(ClassNotFoundException e) {
-			e.printStackTrace();
-			System.exit(1);
-		}
 		catch( SQLException e) {
 			e.printStackTrace();
-			try {
-				con_hausnummern.close();
-			} catch( SQLException innere) {
-				System.out.println("inner sql-exception (tried to to close connection ...");
-				innere.printStackTrace();
-			}
 			PrintWriter writer = response.getWriter();
 			response.setContentType("text/plain; charset=utf-8");
 			response.setHeader("Accept",  "400");
