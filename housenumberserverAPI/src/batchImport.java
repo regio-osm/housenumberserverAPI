@@ -101,9 +101,10 @@ public class batchImport {
 		try {
 			int countryid = 0;
 			String country = "";
+			String countrycode = "";
 			int municipalityid = 0;
 			String municipality = "";
-			int jobid = 0;
+			Long jobid = 0L;
 			String jobname = "";
 			String officialkeysId = "";
 			Integer adminlevel = 0;
@@ -150,6 +151,9 @@ public class batchImport {
 						if(key.equals("Jobname")) {
 							jobname = value;
 						}
+						if(key.equals("Jobid")) {
+							jobid = Long.parseLong(value);
+						}
 						if(key.equals("Officialkeysid")) {
 							officialkeysId = value;
 						}
@@ -170,12 +174,13 @@ public class batchImport {
 
 			System.out.println("beginn von insertfkt");
 			
-			String select_sql = "SELECT land.id AS countryid, land,"
+			String select_sql = "SELECT land.id AS countryid, land, countrycode,"
 				+ " stadt.id AS municipalityid, stadt, officialkeys_id, admin_level,"
 				+ " ST_AsText(polygon) AS polygon_astext, ST_SRID(polygon) AS polygon_srid,"
 				+ " jobs.id AS jobid, jobname"
 				+ " FROM land, stadt, gebiete, jobs WHERE"
-				+ " land = ?"
+				+ " jobs.id = ?"
+				+ " AND land = ?"
 				+ " AND stadt = ?"
 				+ " AND jobname = ?"
 				+ " AND officialkeys_id like ?";
@@ -186,12 +191,13 @@ public class batchImport {
 				+ " ORDER BY admin_level;";
 
 			PreparedStatement selectqueryStmt = con_hausnummern.prepareStatement(select_sql);
-			selectqueryStmt.setString(1, country);
-			selectqueryStmt.setString(2, municipality);
-			selectqueryStmt.setString(3, jobname);
-			selectqueryStmt.setString(4, officialkeysId);
+			selectqueryStmt.setLong(1, jobid);
+			selectqueryStmt.setString(2, country);
+			selectqueryStmt.setString(3, municipality);
+			selectqueryStmt.setString(4, jobname);
+			selectqueryStmt.setString(5, officialkeysId);
 			if(adminlevel != 0)
-				selectqueryStmt.setInt(5, adminlevel);
+				selectqueryStmt.setInt(6, adminlevel);
 			System.out.println("Info: get municipality data ...");
 			ResultSet existingmunicipalityRS = selectqueryStmt.executeQuery();
 
@@ -203,9 +209,11 @@ public class batchImport {
 				countHits++;
 				countryid = existingmunicipalityRS.getInt("countryid");
 				country = existingmunicipalityRS.getString("land");
+				countrycode = existingmunicipalityRS.getString("countrycode");
 				municipalityid = existingmunicipalityRS.getInt("municipalityid");
 				municipality = existingmunicipalityRS.getString("stadt");
-				jobid = existingmunicipalityRS.getInt("jobid");
+				adminlevel = existingmunicipalityRS.getInt("admin_level");
+				jobid = existingmunicipalityRS.getLong("jobid");
 				jobname = existingmunicipalityRS.getString("jobname");
 				polygonAsText = existingmunicipalityRS.getString("polygon_astext");
 				polygonSrid = existingmunicipalityRS.getInt("polygon_srid");
@@ -244,7 +252,7 @@ public class batchImport {
 			try {
 				deletelastevaluationStmt.setInt(1, countryid);
 				deletelastevaluationStmt.setInt(2, municipalityid);
-				deletelastevaluationStmt.setInt(3, jobid);
+				deletelastevaluationStmt.setLong(3, jobid);
 				deletelastevaluationStmt.executeUpdate();
 			}
 			catch( SQLException e) {
@@ -260,7 +268,7 @@ public class batchImport {
 			PreparedStatement deleteLastEvaluationMapResultStmt = con_hausnummern.prepareStatement(deleteLastEvaluationMapResultsql);
 			System.out.println("Info: delete old evaluation in table exporthnr2shape ...");
 			try {
-				deleteLastEvaluationMapResultStmt.setInt(1, jobid);
+				deleteLastEvaluationMapResultStmt.setLong(1, jobid);
 				deleteLastEvaluationMapResultStmt.executeUpdate();
 			}
 			catch( SQLException e) {
@@ -499,7 +507,7 @@ public class batchImport {
 				}
 
 				if(! previousStreet.equals(actStreet) && ! previousStreet.equals("")) {
-					selectOSMStreetGeometryStmt.setInt(1, jobid);
+					selectOSMStreetGeometryStmt.setLong(1, jobid);
 					selectOSMStreetGeometryStmt.setInt(2, street_idlist.get(previousStreet));
 					try {
 						Integer insertStreetResultParameterIndex = 1;
@@ -575,7 +583,7 @@ public class batchImport {
 				if(actlon == 0.0D) {
 					inserthousenumberWithoutGeometryStmt.setInt(1, countryid);
 					inserthousenumberWithoutGeometryStmt.setInt(2, municipalityid);
-					inserthousenumberWithoutGeometryStmt.setInt(3, jobid);
+					inserthousenumberWithoutGeometryStmt.setLong(3, jobid);
 					inserthousenumberWithoutGeometryStmt.setString(4,country);
 					inserthousenumberWithoutGeometryStmt.setString(5, municipality);
 					inserthousenumberWithoutGeometryStmt.setString(6, jobname);
@@ -599,7 +607,7 @@ public class batchImport {
 				} else {
 					inserthousenumberWithGeometryStmt.setInt(1, countryid);
 					inserthousenumberWithGeometryStmt.setInt(2, municipalityid);
-					inserthousenumberWithGeometryStmt.setInt(3, jobid);
+					inserthousenumberWithGeometryStmt.setLong(3, jobid);
 					inserthousenumberWithGeometryStmt.setString(4,country);
 					inserthousenumberWithGeometryStmt.setString(5, municipality);
 					inserthousenumberWithGeometryStmt.setString(6, jobname);
@@ -645,7 +653,7 @@ public class batchImport {
 				// store result of actual job evaluation in evaluations overview table, including timestamps for evalation time and time of local osm db 
 			insertEvaluationResultStmt.setInt(1, countryid);
 			insertEvaluationResultStmt.setInt(2, municipalityid);
-			insertEvaluationResultStmt.setInt(3, jobid);
+			insertEvaluationResultStmt.setLong(3, jobid);
 			insertEvaluationResultStmt.setInt(4, (countHousenumbersListonly + countHousenumbersIdentical));
 			insertEvaluationResultStmt.setInt(5, countHousenumbersIdentical);
 			insertEvaluationResultStmt.setInt(6, countHousenumbersOsmonly);
@@ -669,12 +677,21 @@ public class batchImport {
 				+ " WHERE land_id = ? AND stadt_id = ? AND job_id = ?;";
 			PreparedStatement selectEvaluationResultMapStmt = con_hausnummern.prepareStatement(EvaluationResultMapSql);
 			System.out.println("Info: store evaluation result in table exportjobs2shape ...");
+
+				// set visibility flag depending of municipality area (1) or sub-municipality area (2)
+			Integer evallevel = 1;
+				// if subarea of municipality, set visibility flag to second priority
+			if(adminlevel > 8)
+				evallevel = 2;
+			// if subarea of municipality in Poland (8 instead of standard level 9), set visibility flag to second priority
+			if((adminlevel == 8) && (countrycode.equals("PL")))
+				evallevel = 2;
 			
 				// store result of actual job evaluation in evaluations overview table for Map, including timestamps for evalation time and time of local osm db 
 			try {
 				selectEvaluationResultMapStmt.setInt(1, countryid);
 				selectEvaluationResultMapStmt.setInt(2, municipalityid);
-				selectEvaluationResultMapStmt.setInt(3, jobid);
+				selectEvaluationResultMapStmt.setLong(3, jobid);
 				//System.out.println("select evaluation result map statement ===" + EvaluationResultMapSql + "===");
 				java.util.Date time_beforeinsert = new java.util.Date();
 				ResultSet selectEvaluationResultMapRs = selectEvaluationResultMapStmt.executeQuery();
@@ -683,6 +700,7 @@ public class batchImport {
 						+ " SET stadtbezrk = ?, hnr_soll = ?, hnr_osm = ?,"
 						+ " hnr_fhlosm = ?, hnr_nurosm = ?, hnr_abdeck = ?,"
 						+ " polygon = ST_Transform(ST_Geomfromtext(?, ?), 4326),"
+						+ " evallevel = ?,"
 						+ " timestamp = now()"
 						+ " WHERE land_id = ? AND stadt_id = ? AND job_id = ?;";
 					PreparedStatement updateEvaluationResultMapStmt = con_hausnummern.prepareStatement(EvaluationResultMapSql);
@@ -694,28 +712,30 @@ public class batchImport {
 					updateEvaluationResultMapStmt.setInt(6, (int)(Math.round(resultpercentfulfilled * 10.0) / 10.0));
 					updateEvaluationResultMapStmt.setString(7, polygonAsText);
 					updateEvaluationResultMapStmt.setInt(8, polygonSrid);
-					updateEvaluationResultMapStmt.setInt(9, countryid);
-					updateEvaluationResultMapStmt.setInt(10, municipalityid);
-					updateEvaluationResultMapStmt.setInt(11, jobid);
+					updateEvaluationResultMapStmt.setInt(9, evallevel);
+					updateEvaluationResultMapStmt.setInt(10, countryid);
+					updateEvaluationResultMapStmt.setInt(11, municipalityid);
+					updateEvaluationResultMapStmt.setLong(12, jobid);
 					updateEvaluationResultMapStmt.executeUpdate();
 					updateEvaluationResultMapStmt.close();
 				} else {
 					EvaluationResultMapSql = "INSERT INTO exportjobs2shape"
 						+ " (land_id, stadt_id, job_id, stadtbezrk, hnr_soll, hnr_osm,"
-						+ " hnr_fhlosm, hnr_nurosm, hnr_abdeck, timestamp, polygon)"
-						+ " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, now(), ST_Transform(ST_Geomfromtext(?, ?), 4326));";
+						+ " hnr_fhlosm, hnr_nurosm, hnr_abdeck, evallevel, timestamp, polygon)"
+						+ " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, now(), ST_Transform(ST_Geomfromtext(?, ?), 4326));";
 					PreparedStatement insertEvaluationResultMapStmt = con_hausnummern.prepareStatement(EvaluationResultMapSql);
 					insertEvaluationResultMapStmt.setInt(1, countryid);
 					insertEvaluationResultMapStmt.setInt(2, municipalityid);
-					insertEvaluationResultMapStmt.setInt(3, jobid);
+					insertEvaluationResultMapStmt.setLong(3, jobid);
 					insertEvaluationResultMapStmt.setString(4, jobname);
 					insertEvaluationResultMapStmt.setInt(5, (countHousenumbersListonly + countHousenumbersIdentical));
 					insertEvaluationResultMapStmt.setInt(6, countHousenumbersIdentical);
 					insertEvaluationResultMapStmt.setInt(7, countHousenumbersListonly);
 					insertEvaluationResultMapStmt.setInt(8, countHousenumbersOsmonly);
 					insertEvaluationResultMapStmt.setInt(9, (int)(Math.round(resultpercentfulfilled * 10.0) / 10.0));
-					insertEvaluationResultMapStmt.setString(10, polygonAsText);
-					insertEvaluationResultMapStmt.setInt(11, polygonSrid);
+					insertEvaluationResultMapStmt.setInt(10, evallevel);
+					insertEvaluationResultMapStmt.setString(11, polygonAsText);
+					insertEvaluationResultMapStmt.setInt(12, polygonSrid);
 					insertEvaluationResultMapStmt.executeUpdate();
 					insertEvaluationResultMapStmt.close();
 				}

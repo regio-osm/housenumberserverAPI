@@ -109,7 +109,7 @@ public class getHousenumberlist extends HttpServlet {
      * initialization on servlett startup
      */
     public void 	init(ServletConfig config) {
-    	System.out.println("\n\nok, servlet " + config.getServletName() + " will be initialized now ...\n");
+    	System.out.println("\n\nok, servlet v20160508 " + config.getServletName() + " will be initialized now ...\n");
 
 		String path = config.getServletContext().getRealPath("/WEB-INF");
 		configuration = new Applicationconfiguration(path);
@@ -175,9 +175,28 @@ public class getHousenumberlist extends HttpServlet {
 		java.util.Date requestEndtime;
 
 		try {
+			if(		(con_hausnummern == null) || (con_hausnummern.getMetaData() == null) || (con_hausnummern.getMetaData().getURL() == null) 
+				|| 	con_hausnummern.getMetaData().getURL().equals(""))) {
+				Class.forName("org.postgresql.Driver");
+				
+				String url_hausnummern = configuration.db_application_url;
+				con_hausnummern = DriverManager.getConnection(url_hausnummern, configuration.db_application_username, configuration.db_application_password);
+			}
+		} 
+		catch(ClassNotFoundException e) {
+			e.printStackTrace();
+			System.exit(1);
+		}
+		catch( SQLException e) {
+			System.out.println("SQLException happened within init(), details follows ...");
+			System.out.println(e.toString());
+			return;
+		}    
+		
+		try {
 			requestStarttime = new java.util.Date();
 
-			System.out.println("\n\nBeginn getHousenumberlist/doPost at " + requestStarttime.toString() + " ...");
+			System.out.println("\n\nBeginn getHousenumberlist/doPost v20160508 at " + requestStarttime.toString() + " ...");
 			System.out.println("request komplett ===" + request.toString() + "===");
 
 			String parameterCountry = URLDecoder.decode(request.getParameter("country"),"UTF-8");
@@ -185,6 +204,7 @@ public class getHousenumberlist extends HttpServlet {
 			String parameterOfficialkeysid = URLDecoder.decode(request.getParameter("officialkeysid"),"UTF-8");
 			Integer parameterAdminlevel = Integer.parseInt(URLDecoder.decode(request.getParameter("adminlevel"),"UTF-8"));
 			String parameterJobname = URLDecoder.decode(request.getParameter("jobname"),"UTF-8");
+			String parameterJobId  = URLDecoder.decode(request.getParameter("jobname"),"UTF-8");
 			String parameterSubid = URLDecoder.decode(request.getParameter("subid"),"UTF-8");
 			String parameterServerobjectid = URLDecoder.decode(request.getParameter("serverobjectid"),"UTF-8");
 
@@ -195,6 +215,7 @@ public class getHousenumberlist extends HttpServlet {
 			System.out.println(" officialkeysid          ===" + parameterOfficialkeysid + "===");
 			System.out.println(" adminlevel              ===" + parameterAdminlevel + "===");
 			System.out.println(" jobname                 ===" + parameterJobname + "===");
+			System.out.println(" job_id                  ===" + parameterJobId + "===");
 			System.out.println(" subid      	         ===" + parameterSubid + "===");
 			System.out.println(" parameterServerobjectid ===" + parameterServerobjectid + "===");
 
@@ -222,8 +243,7 @@ public class getHousenumberlist extends HttpServlet {
 			selectMunicipalitySql += " LEFT JOIN jobs AS j";
 			selectMunicipalitySql += "   ON j.gebiete_id = gebietejobs.id";
 			selectMunicipalitySql += " WHERE";
-			selectMunicipalitySql += " land = ? AND";
-			selectMunicipalitySql += " stadt = ?";
+			selectMunicipalitySql += " jobs.id = ?";
 			if(! parameterOfficialkeysid.equals(""))
 				selectMunicipalitySql += " AND officialkeys_id = ?";
 			selectMunicipalitySql += ";";
@@ -240,10 +260,8 @@ public class getHousenumberlist extends HttpServlet {
 				selectMunicipalityStmt.setString(preparedmuniindex++, parameterOfficialkeysid);
 				munipreparedParameters += ", officialkeysid='" + parameterOfficialkeysid + "'";
 			}
-			selectMunicipalityStmt.setString(preparedmuniindex++, parameterCountry);
-			munipreparedParameters += ", country='" + parameterCountry + "'";
-			selectMunicipalityStmt.setString(preparedmuniindex++, parameterMunicipality);
-			munipreparedParameters += ", municipality='" + parameterMunicipality + "'";
+			selectMunicipalityStmt.setString(preparedmuniindex++, parameterJobId);
+			munipreparedParameters += ", job_id='" + parameterJobId + "'";
 			if(! parameterOfficialkeysid.equals("")) {
 				selectMunicipalityStmt.setString(preparedmuniindex++, parameterOfficialkeysid);
 				munipreparedParameters += ", officialkeysid='" + parameterOfficialkeysid + "'";
@@ -318,6 +336,7 @@ public class getHousenumberlist extends HttpServlet {
 			selectPolygonSql += " j.id as job_id";
 			selectPolygonSql += " FROM jobs AS j, gebiete AS g, stadt AS s, land AS l";
 			selectPolygonSql += " WHERE";
+			selectPolygonSql += " j.id = ?";
 			selectPolygonSql += " j.gebiete_id = g.id AND";
 			selectPolygonSql += " j.stadt_id = s.id AND";
 			selectPolygonSql += " s.land_id = l.id AND";
@@ -333,6 +352,8 @@ public class getHousenumberlist extends HttpServlet {
 
 			int preparedpolyindex = 1;
 			String polypreparedParameters = "";
+			selectPolygonStmt.setString(preparedpolyindex++, municipalityJobId);
+			polypreparedParameters += ", job_id='" + municipalityJobId + "'";
 			selectPolygonStmt.setString(preparedpolyindex++, parameterCountry);
 			polypreparedParameters += ", country='" + parameterCountry + "'";
 			selectPolygonStmt.setString(preparedpolyindex++, parameterMunicipality);

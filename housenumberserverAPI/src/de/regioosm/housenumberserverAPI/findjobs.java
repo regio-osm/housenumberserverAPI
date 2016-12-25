@@ -145,7 +145,7 @@ public class findjobs extends HttpServlet {
 			String actoutputline = "";
 
 			actoutputline = "#" + "Country\tCountrycode\tMunicipality\tMunicipality-Id\tAdmin-Level"
-				+ "\tJobname\tSubarea-Id\tOSM-Relation-Id\n";
+				+ "\tJobname\tSubarea-Id\tOSM-Relation-Id\tJobid\n";
 			dataoutput.append(actoutputline);
 			
 			while(existingmunicipalityRS.next()) {
@@ -160,7 +160,9 @@ public class findjobs extends HttpServlet {
 					+ existingmunicipalityRS.getInt("admin_level") + "\t"
 					+ existingmunicipalityRS.getString("jobname") + "\t"
 					+ existingmunicipalityRS.getString("sub_id") + "\t"
-					+ osm_id + "\n";
+					+ osm_id + "\t"
+					+ existingmunicipalityRS.getString("jobid")
+					+ "\n";
 				dataoutput.append(actoutputline);
 			}
 			System.out.println("result content ===" + dataoutput.toString() + "===");
