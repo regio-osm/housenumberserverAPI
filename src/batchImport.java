@@ -19,7 +19,7 @@ import java.sql.Timestamp;
 import java.text.DateFormat;
 import java.util.*;
 
-import de.regioosm.housenumberserverAPI.Applicationconfiguration;
+import de.regioosm.housenumberserverAPI.*;
 
 
 /**
@@ -167,10 +167,6 @@ public class batchImport {
 			if(officialkeysId.equals(""))
 				officialkeysId = "%";
 
-			Class.forName("org.postgresql.Driver");
-	
-			String url_hausnummern = configuration.db_application_url;
-			con_hausnummern = DriverManager.getConnection(url_hausnummern, configuration.db_application_username, configuration.db_application_password);
 
 			System.out.println("beginn von insertfkt");
 			
@@ -179,25 +175,28 @@ public class batchImport {
 				+ " ST_AsText(polygon) AS polygon_astext, ST_SRID(polygon) AS polygon_srid,"
 				+ " jobs.id AS jobid, jobname"
 				+ " FROM land, stadt, gebiete, jobs WHERE"
-				+ " jobs.id = ?"
-				+ " AND land = ?"
+				+ " land = ?"
 				+ " AND stadt = ?"
 				+ " AND jobname = ?"
-				+ " AND officialkeys_id like ?";
-				if(adminlevel != 0)
-					select_sql += " AND admin_level = ?";
-				select_sql += " AND gebiete.stadt_id = stadt.id"
-				+ " AND jobs.gebiete_id = gebiete.id"
-				+ " ORDER BY admin_level;";
+				+ " AND officialkeys_id like ?"
+				+ " AND gebiete.stadt_id = stadt.id"
+				+ " AND jobs.gebiete_id = gebiete.id";
+			if(jobid != 0L)
+				select_sql += " AND jobs.id = ?";
+			if(adminlevel != 0)
+				select_sql += " AND admin_level = ?";
+			select_sql += " ORDER BY admin_level;";
 
 			PreparedStatement selectqueryStmt = con_hausnummern.prepareStatement(select_sql);
-			selectqueryStmt.setLong(1, jobid);
-			selectqueryStmt.setString(2, country);
-			selectqueryStmt.setString(3, municipality);
-			selectqueryStmt.setString(4, jobname);
-			selectqueryStmt.setString(5, officialkeysId);
+			Integer selectqueryParameterIndex = 1;
+			selectqueryStmt.setString(selectqueryParameterIndex++, country);
+			selectqueryStmt.setString(selectqueryParameterIndex++, municipality);
+			selectqueryStmt.setString(selectqueryParameterIndex++, jobname);
+			selectqueryStmt.setString(selectqueryParameterIndex++, officialkeysId);
+			if(jobid != 0L)
+				selectqueryStmt.setLong(selectqueryParameterIndex++, jobid);
 			if(adminlevel != 0)
-				selectqueryStmt.setInt(6, adminlevel);
+				selectqueryStmt.setInt(selectqueryParameterIndex++, adminlevel);
 			System.out.println("Info: get municipality data ...");
 			ResultSet existingmunicipalityRS = selectqueryStmt.executeQuery();
 
@@ -225,7 +224,7 @@ public class batchImport {
 				System.out.println("Error: more than one related jobs were found, CANCEL import ...");
 				System.out.println(moreThanOneRowContent.toString());
 				selectqueryStmt.close();
-				con_hausnummern.close();
+				con_hausnummern.rollback();
 				return false;
 			} else if(countHits == 0) {
 				selectqueryStmt.close();
@@ -233,7 +232,6 @@ public class batchImport {
 				System.out.println("  country ===" + country + "===, municipality ===" 
 						+ municipality + "===, officialkeysId ===" + officialkeysId + "===, jobname ===" + jobname + "===");
 				selectqueryStmt.close();
-				con_hausnummern.close();
 				return false;
 			}
 			
@@ -256,12 +254,13 @@ public class batchImport {
 				deletelastevaluationStmt.executeUpdate();
 			}
 			catch( SQLException e) {
-				System.out.println("ERROR, when tried to delete rows for old evaluation, but import will continue");
+				System.out.println("ERROR, when tried to delete rows for old evaluation.");
 				e.printStackTrace();
+				return false;
 			}
 			deletelastevaluationStmt.close();
 
-				// delete all job entries in exporthnr2shape
+				// delete all job entries in 	hnr2shape
 			String deleteLastEvaluationMapResultsql = "DELETE FROM exporthnr2shape";
 			deleteLastEvaluationMapResultsql  += " WHERE";
 			deleteLastEvaluationMapResultsql  += " job_id = ?;";
@@ -349,8 +348,9 @@ public class batchImport {
 				+ " ?, ?, ?);";
 			PreparedStatement inserthousenumberWithoutGeometryStmt = con_hausnummern.prepareStatement(inserthousenumberWithoutGeometrySql);
 
+
 			
-				// change to transaction mode
+			// change to transaction mode
 			con_hausnummern.setAutoCommit(false);
 
 				// store column names, below found in file header line
@@ -502,6 +502,8 @@ public class batchImport {
 						catch( SQLException e) {
 							System.out.println("ERROR: during insert in table evaluation_overview, insert code was ===" + insertstreetsql + "===");
 							System.out.println(e.toString());
+							con_hausnummern.rollback();
+							return false;
 						}
 					}
 				}
@@ -538,7 +540,6 @@ public class batchImport {
 								
 								insertStreetResultStmt.setInt(insertStreetResultParameterIndex++, hausnummernFertigProzent);
 								insertStreetResultParameters += ", hnr_abdeck=" + hausnummernFertigProzent;
-
 								insertStreetResultStmt.setString(insertStreetResultParameterIndex++, actStreetMissingHousenumbers.toString());
 								insertStreetResultParameters += ", hnr_liste=" + actStreetMissingHousenumbers.toString();
 								insertStreetResultStmt.setString(insertStreetResultParameterIndex++, selectOSMStreetGeometryRS.getString("linestring900913"));
@@ -550,6 +551,8 @@ public class batchImport {
 								catch( SQLException e) {
 									System.out.println("ERROR: during insert in table exporthrn2shape, insert code was ===" + insertStreetResultSql + "===");
 									e.printStackTrace();
+									con_hausnummern.rollback();
+									return false;
 								}
 							} else {
 								System.out.println("WARNUNG: leeres Polygon in jobs_strassen id: " + selectOSMStreetGeometryRS.getLong("id"));
@@ -559,6 +562,8 @@ public class batchImport {
 					catch( SQLException e) {
 						System.out.println("ERROR: during insert in table evaluation_overview, insert code was ===" + insertstreetsql + "===");
 						System.out.println(e.toString());
+						con_hausnummern.rollback();
+						return false;
 					}
 					actStreetMissingHousenumbers = new StringBuffer();
 					street_hittype_i = 0;
@@ -630,6 +635,8 @@ public class batchImport {
 					catch( SQLException e) {
 						System.out.println("ERROR: during insert in table auswertung_hausnummern, insert code was ===" + inserthousenumberWithGeometrySql + "===");
 						e.printStackTrace();
+						con_hausnummern.rollback();
+						return false;
 					}
 				}
 			} // end of loop over all content lines
@@ -670,6 +677,8 @@ public class batchImport {
 			catch( SQLException e) {
 				System.out.println("ERROR: during insert in table osmhausnummern_hausnummern identische, insert code was ===" + insertEvaluationResultSql + "===");
 				e.printStackTrace();
+				con_hausnummern.rollback();
+				return false;
 			}
 			insertEvaluationResultStmt.close();
 
@@ -746,6 +755,8 @@ public class batchImport {
 			catch( SQLException e) {
 				System.out.println("ERROR: during select result overview map entry, select code was ===" + EvaluationResultMapSql + "===");
 				e.printStackTrace();
+				con_hausnummern.rollback();
+				return false;
 			}
 
 				// if job is from jobqueue table, then update state of job
@@ -782,27 +793,16 @@ public class batchImport {
 
 			selectqueryStmt.close();
 
-			con_hausnummern.close();
-
 			System.out.println("loaded streets from official housenumberlist: " + numberStreetsFromOfficialList);
 			System.out.println("loaded streets dynamically: " + numberStreetsLoadedDynamically);
 			System.out.println("inserted new streets into DB: " + numberStreetInsertedIntoDB);
 
-		} // end of try to connect to DB and operate with DB
-		catch(ClassNotFoundException e) {
-			e.printStackTrace();
-			System.exit(1);
 		}
 		catch( SQLException e) {
-			e.printStackTrace();
-			try {
-				con_hausnummern.close();
-			} catch( SQLException innere) {
-				System.out.println("inner sql-exception (tried to to close connection ...");
-				innere.printStackTrace();
-			}
+			System.out.println("SQL Error occured, before transaction started. Import will be ignored");
 			return false;
 		}
+
 		System.out.println("time for insertResultIntoDBouter in sek: " + (new Date().getTime() - insertResultIntoDBouter.getTime())/1000);
 		return true;
 	}
@@ -848,11 +848,23 @@ public class batchImport {
 		
 		DateFormat dateformat = DateFormat.getDateTimeInstance();
 
-		
-		String filename = "";
-		String importworkPathandFilename = resultfiles_uploadpath + File.separator + "batchimport.active";
-		String importworkoutputline = "";
 		try {
+			Class.forName("org.postgresql.Driver");
+		} // end of try to connect to DB and operate with DB
+		catch(ClassNotFoundException e) {
+			e.printStackTrace();
+			System.exit(1);
+		}
+		
+		try {
+
+			String url_hausnummern = configuration.db_application_url;
+			con_hausnummern = DriverManager.getConnection(url_hausnummern, configuration.db_application_username, configuration.db_application_password);
+		
+			String filename = "";
+			String importworkPathandFilename = resultfiles_uploadpath + File.separator + "batchimport.active";
+			String importworkoutputline = "";
+
 			File importworkPathandFilenameHandle = new File(importworkPathandFilename);
 			if(importworkPathandFilenameHandle.exists() && !importworkPathandFilenameHandle.isDirectory()) {
 				System.out.println("Batchimport already active, stopp processign of this program");
@@ -920,11 +932,15 @@ public class batchImport {
 				importworkPathandFilenameHandle.renameTo(destinationworkPathandFilenameHandle);
 				System.out.println("Batchimport progress file renamed to finish-state");
 			}
+
+			con_hausnummern.close();
+
 		} catch (IOException ioerror) {
 			System.out.println("ERORR: IOException happened, details follows ...");
-			System.out.println(" .. couldn't open file to write, filename was ===" + filename + "===");
-			System.out.println(" .. couldn't open file to write, filename was ===" + ioerror.toString() + "===");
 			ioerror.printStackTrace();
+		} catch (SQLException sqlerror) {
+			System.out.println("ERORR: SQLException happened, details follows ...");
+			sqlerror.printStackTrace();
 		}
 	}
 }

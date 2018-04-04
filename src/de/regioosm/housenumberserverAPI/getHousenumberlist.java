@@ -109,7 +109,7 @@ public class getHousenumberlist extends HttpServlet {
      * initialization on servlett startup
      */
     public void 	init(ServletConfig config) {
-    	System.out.println("\n\nok, servlet v20160508 " + config.getServletName() + " will be initialized now ...\n");
+    	System.out.println("\n\nok, servlet v20170107 " + config.getServletName() + " will be initialized now ...\n");
 
 		String path = config.getServletContext().getRealPath("/WEB-INF");
 		configuration = new Applicationconfiguration(path);
@@ -176,7 +176,7 @@ public class getHousenumberlist extends HttpServlet {
 
 		try {
 			if(		(con_hausnummern == null) || (con_hausnummern.getMetaData() == null) || (con_hausnummern.getMetaData().getURL() == null) 
-				|| 	con_hausnummern.getMetaData().getURL().equals(""))) {
+				|| 	con_hausnummern.getMetaData().getURL().equals("")) {
 				Class.forName("org.postgresql.Driver");
 				
 				String url_hausnummern = configuration.db_application_url;
@@ -196,7 +196,7 @@ public class getHousenumberlist extends HttpServlet {
 		try {
 			requestStarttime = new java.util.Date();
 
-			System.out.println("\n\nBeginn getHousenumberlist/doPost v20160508 at " + requestStarttime.toString() + " ...");
+			System.out.println("\n\nBeginn getHousenumberlist/doPost v20170107 at " + requestStarttime.toString() + " ...");
 			System.out.println("request komplett ===" + request.toString() + "===");
 
 			String parameterCountry = URLDecoder.decode(request.getParameter("country"),"UTF-8");
@@ -352,7 +352,7 @@ public class getHousenumberlist extends HttpServlet {
 
 			int preparedpolyindex = 1;
 			String polypreparedParameters = "";
-			selectPolygonStmt.setString(preparedpolyindex++, municipalityJobId);
+			selectPolygonStmt.setLong(preparedpolyindex++, municipalityJobId);
 			polypreparedParameters += ", job_id='" + municipalityJobId + "'";
 			selectPolygonStmt.setString(preparedpolyindex++, parameterCountry);
 			polypreparedParameters += ", country='" + parameterCountry + "'";

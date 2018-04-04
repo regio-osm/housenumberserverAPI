@@ -64,7 +64,7 @@ public class getQueueJobs extends HttpServlet {
      * initialization on servlett startup
      */
     public void 	init(ServletConfig config) {
-    	System.out.println("\n\nok, servlet v20160508 " + config.getServletName() + " will be initialized now ...\n");
+    	System.out.println("\n\nok, servlet v20170107 " + config.getServletName() + " will be initialized now ...\n");
 
 		String path = config.getServletContext().getRealPath("/WEB-INF");
 		configuration = new Applicationconfiguration(path);
@@ -133,7 +133,7 @@ public class getQueueJobs extends HttpServlet {
 		ResultSet queuejobsqueryRS = null;
 		
 		try {
-			System.out.println("\nBeginn getQueueJobs/doPost v20160508 ... " + new Date());
+			System.out.println("\nBeginn getQueueJobs/doPost v20170107 ... " + new Date());
 			System.out.println("request komplett ===" + request.toString() + "===");
 
 			MultipartMap map = new MultipartMap(request, this);
