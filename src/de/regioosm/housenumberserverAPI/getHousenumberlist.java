@@ -109,7 +109,7 @@ public class getHousenumberlist extends HttpServlet {
      * initialization on servlett startup
      */
     public void 	init(ServletConfig config) {
-    	System.out.println("\n\nok, servlet v20170107 " + config.getServletName() + " will be initialized now ...\n");
+    	System.out.println("\n\nok, servlet v20180408 " + config.getServletName() + " will be initialized now ...\n");
 
 		String path = config.getServletContext().getRealPath("/WEB-INF");
 		configuration = new Applicationconfiguration(path);
@@ -196,7 +196,7 @@ public class getHousenumberlist extends HttpServlet {
 		try {
 			requestStarttime = new java.util.Date();
 
-			System.out.println("\n\nBeginn getHousenumberlist/doPost v20170107 at " + requestStarttime.toString() + " ...");
+			System.out.println("\n\nBeginn getHousenumberlist/doPost v20180408 at " + requestStarttime.toString() + " ...");
 			System.out.println("request komplett ===" + request.toString() + "===");
 
 			String parameterCountry = URLDecoder.decode(request.getParameter("country"),"UTF-8");
@@ -204,11 +204,10 @@ public class getHousenumberlist extends HttpServlet {
 			String parameterOfficialkeysid = URLDecoder.decode(request.getParameter("officialkeysid"),"UTF-8");
 			Integer parameterAdminlevel = Integer.parseInt(URLDecoder.decode(request.getParameter("adminlevel"),"UTF-8"));
 			String parameterJobname = URLDecoder.decode(request.getParameter("jobname"),"UTF-8");
-			String parameterJobId  = URLDecoder.decode(request.getParameter("jobname"),"UTF-8");
+			long parameterJobId  = Long.parseLong(request.getParameter("job_id"));
 			String parameterSubid = URLDecoder.decode(request.getParameter("subid"),"UTF-8");
 			String parameterServerobjectid = URLDecoder.decode(request.getParameter("serverobjectid"),"UTF-8");
 
-			
 			System.out.println("=== input parameters for db without decoding ===");
 			System.out.println(" country                 ===" + parameterCountry + "===");
 			System.out.println(" municipality            ===" + parameterMunicipality + "===");
@@ -222,30 +221,30 @@ public class getHousenumberlist extends HttpServlet {
 			System.out.println(" request encoding ===" + request.getCharacterEncoding());
 			
 
-			String selectMunicipalitySql = "SELECT land, stadt, s.id as stadt_id, osm_hierarchy, officialkeys_id,";
-			selectMunicipalitySql += " sourcelist_url, sourcelist_copyrighttext, sourcelist_useagetext,";
-			selectMunicipalitySql += " sourcelist_contentdate, sourcelist_filedate,";
-			selectMunicipalitySql += " officialgeocoordinates,";
-			selectMunicipalitySql += " j.id as municipality_jobid, jobname AS municipality_jobname";		//optional available columns (if gebiete and job creation run already) with job_id and name of municipality itself
-			selectMunicipalitySql += " FROM stadt AS s";
-			selectMunicipalitySql += " JOIN land as l";
-			selectMunicipalitySql += "   ON s.land_id = l.id";
-			selectMunicipalitySql += " LEFT JOIN";
-			selectMunicipalitySql += "   (SELECT  gebiete.id AS id, name, stadt_id FROM gebiete";
-			selectMunicipalitySql += "    JOIN stadt on gebiete.stadt_id = stadt.id";
-			selectMunicipalitySql += "    JOIN land on stadt.land_id = land.id";
-			selectMunicipalitySql += "      WHERE land = ? AND";
-			selectMunicipalitySql += "      stadt = ?";
+			String selectMunicipalitySql = "SELECT land, stadt, s.id as stadt_id, osm_hierarchy, officialkeys_id, " +
+				"sourcelist_url, sourcelist_copyrighttext, sourcelist_useagetext, " +
+				"sourcelist_contentdate, sourcelist_filedate, " +
+				"officialgeocoordinates, " +
+				"j.id as municipality_jobid, jobname AS municipality_jobname " + 		//optional available columns (if gebiete and job creation run already) with job_id and name of municipality itself
+				"FROM stadt AS s " +
+				"JOIN land as l " +
+				"  ON s.land_id = l.id " +
+				"LEFT JOIN " +
+				"  (SELECT  gebiete.id AS id, name, stadt_id FROM gebiete " +
+				"   JOIN stadt on gebiete.stadt_id = stadt.id " +
+				"   JOIN land on stadt.land_id = land.id " +
+				"     WHERE land = ? AND " +
+				"     stadt = ? ";
 			if(! parameterOfficialkeysid.equals(""))
-				selectMunicipalitySql += "      AND officialkeys_id = ?";
-			selectMunicipalitySql += "      ORDER BY admin_level::int LIMIT 1) AS gebietejobs";		// just get most top admin_level row of gebiete
-			selectMunicipalitySql += "   ON gebietejobs.stadt_id = s.id";
-			selectMunicipalitySql += " LEFT JOIN jobs AS j";
-			selectMunicipalitySql += "   ON j.gebiete_id = gebietejobs.id";
-			selectMunicipalitySql += " WHERE";
-			selectMunicipalitySql += " jobs.id = ?";
+				selectMunicipalitySql += "      AND officialkeys_id = ? ";
+			selectMunicipalitySql += "      ORDER BY admin_level::int LIMIT 1) AS gebietejobs " +		// just get most top admin_level row of gebiete
+				"  ON gebietejobs.stadt_id = s.id " +
+				"LEFT JOIN jobs AS j " +
+				"  ON j.gebiete_id = gebietejobs.id " +
+				"WHERE " +
+				" j.id = ? ";
 			if(! parameterOfficialkeysid.equals(""))
-				selectMunicipalitySql += " AND officialkeys_id = ?";
+				selectMunicipalitySql += "AND officialkeys_id = ? ";
 			selectMunicipalitySql += ";";
 
 			PreparedStatement selectMunicipalityStmt = con_hausnummern.prepareStatement(selectMunicipalitySql);
@@ -253,20 +252,15 @@ public class getHousenumberlist extends HttpServlet {
 			int preparedmuniindex = 1;
 			String munipreparedParameters = "";
 			selectMunicipalityStmt.setString(preparedmuniindex++, parameterCountry);
-			munipreparedParameters += ", country='" + parameterCountry + "'";
 			selectMunicipalityStmt.setString(preparedmuniindex++, parameterMunicipality);
-			munipreparedParameters += ", municipality='" + parameterMunicipality + "'";
 			if(! parameterOfficialkeysid.equals("")) {
 				selectMunicipalityStmt.setString(preparedmuniindex++, parameterOfficialkeysid);
-				munipreparedParameters += ", officialkeysid='" + parameterOfficialkeysid + "'";
 			}
-			selectMunicipalityStmt.setString(preparedmuniindex++, parameterJobId);
-			munipreparedParameters += ", job_id='" + parameterJobId + "'";
+			selectMunicipalityStmt.setLong(preparedmuniindex++, parameterJobId);
 			if(! parameterOfficialkeysid.equals("")) {
 				selectMunicipalityStmt.setString(preparedmuniindex++, parameterOfficialkeysid);
-				munipreparedParameters += ", officialkeysid='" + parameterOfficialkeysid + "'";
 			}
-			System.out.println("municipality query: Parameters " + munipreparedParameters + "     ===" + selectMunicipalitySql + "===");
+			System.out.println("municipality query: " + selectMunicipalityStmt.toString() + "===");
 
 
 			ResultSet selectMunicipalityRS = selectMunicipalityStmt.executeQuery();
@@ -311,6 +305,7 @@ public class getHousenumberlist extends HttpServlet {
 			requestEndtime = new java.util.Date();
 			System.out.println("time for query for municipality in sec: " + (requestEndtime.getTime() - requestStarttime.getTime())/1000);
 
+				// if more than one municipalities found, stop with a warning
 			if(countMunicipalities > 1) {
 				String errormessage = "Error: Number of municipalities, that fit to requested municipality '" + municipality
 					+ "' in country '" + country + "' were more than one, so housenumber list can't be delivered";
@@ -330,43 +325,16 @@ public class getHousenumberlist extends HttpServlet {
 			}
 			
 			
-			String selectPolygonSql = "SELECT g.polygon as polygon900913,";
-			selectPolygonSql += " ST_Transform(g.polygon,4326) AS polygon4326,";
-			selectPolygonSql += " ST_GeometryType(g.polygon) AS polygontype,";
-			selectPolygonSql += " j.id as job_id";
-			selectPolygonSql += " FROM jobs AS j, gebiete AS g, stadt AS s, land AS l";
-			selectPolygonSql += " WHERE";
-			selectPolygonSql += " j.id = ?";
-			selectPolygonSql += " j.gebiete_id = g.id AND";
-			selectPolygonSql += " j.stadt_id = s.id AND";
-			selectPolygonSql += " s.land_id = l.id AND";
-			selectPolygonSql += " land = ? AND";
-			selectPolygonSql += " stadt = ? AND";
-			if(! parameterOfficialkeysid.equals(""))
-				selectPolygonSql += " officialkeys_id = ? AND";
-			selectPolygonSql += " admin_level = ? AND";
-			selectPolygonSql += " jobname = ?";
-			selectPolygonSql += ";";
+			String selectPolygonSql = "SELECT g.polygon as polygon900913, " +
+				"ST_Transform(g.polygon,4326) AS polygon4326, " +
+				"ST_GeometryType(g.polygon) AS polygontype, " +
+				"j.id as job_id " +
+				"FROM jobs AS j JOIN gebiete AS g ON j.gebiete_id = g.id " +
+				"WHERE " +
+				"j.id = ?;";
 			PreparedStatement selectPolygonStmt = con_hausnummern.prepareStatement(selectPolygonSql);
-
-
-			int preparedpolyindex = 1;
-			String polypreparedParameters = "";
-			selectPolygonStmt.setLong(preparedpolyindex++, municipalityJobId);
-			polypreparedParameters += ", job_id='" + municipalityJobId + "'";
-			selectPolygonStmt.setString(preparedpolyindex++, parameterCountry);
-			polypreparedParameters += ", country='" + parameterCountry + "'";
-			selectPolygonStmt.setString(preparedpolyindex++, parameterMunicipality);
-			polypreparedParameters += ", municipality='" + parameterMunicipality + "'";
-			if(! parameterOfficialkeysid.equals("")) {
-				selectPolygonStmt.setString(preparedpolyindex++, parameterOfficialkeysid);
-				polypreparedParameters += ", officialkeysid='" + parameterOfficialkeysid + "'";
-			}
-			selectPolygonStmt.setInt(preparedpolyindex++, parameterAdminlevel);
-			polypreparedParameters += ", adminlevel='" + parameterAdminlevel + "'";
-			selectPolygonStmt.setString(preparedpolyindex++, parameterJobname);
-			polypreparedParameters += ", jobname='" + parameterJobname + "'";
-			System.out.println("polygon query: Parameters " + polypreparedParameters + "     ===" + selectPolygonSql + "===");
+			selectPolygonStmt.setLong(1, municipalityJobId);
+			System.out.println("polygon query: " + selectPolygonStmt.toString() + "===");
 
 			requestStarttime = new java.util.Date();
 
@@ -395,98 +363,56 @@ public class getHousenumberlist extends HttpServlet {
 	// is not in production, because Tomcat heap size exception and algorithm not finished completely
 //officialgeocoordinates = false;
 
-			int preparedindex = 1;
-			String listpreparedParameters = "";
 			requestStarttime = new java.util.Date();
 				// if subadmin query for an official housenumber list, where 
 				// - the subadmin area is not given,
 				// - BUT geocoordinates are available for the official housenumbers (table stadt, column officialgeocoordinates, value = "y" new at 2015-02-09
 			if(officialgeocoordinates) {
-				sqlqueryofficialhousenumbers = "SELECT strasse, postcode, sh.hausnummer AS hausnummer,";
-				sqlqueryofficialhousenumbers += " sh.hausnummer_sortierbar AS hausnummer_sortierbar,";
-				sqlqueryofficialhousenumbers += " strasse, sh.sub_id AS sub_id, ST_X(point) as lon, ST_Y(point) as lat, pointsource, hausnummer_bemerkung";
-				sqlqueryofficialhousenumbers += " FROM stadt_hausnummern AS sh,";
-				sqlqueryofficialhousenumbers += " strasse AS str,";
-				sqlqueryofficialhousenumbers += " jobs AS j,";
-				sqlqueryofficialhousenumbers += " gebiete AS g,";
-				sqlqueryofficialhousenumbers += " stadt AS s,";
-				sqlqueryofficialhousenumbers += " land as l";
-				sqlqueryofficialhousenumbers += " WHERE";
-				sqlqueryofficialhousenumbers += " land = ? AND";
-				sqlqueryofficialhousenumbers += " stadt = ? AND";
-				if(! officialkeysid.equals(""))
-					sqlqueryofficialhousenumbers += " officialkeys_id = ? AND";
-				sqlqueryofficialhousenumbers += " j.id = ? AND";
+				sqlqueryofficialhousenumbers = "SELECT strasse, postcode, sh.hausnummer AS hausnummer, " +
+				"sh.hausnummer_sortierbar AS hausnummer_sortierbar, " +
+				"strasse, sh.sub_id AS sub_id, ST_X(point) as lon, ST_Y(point) as lat, pointsource, hausnummer_bemerkung " +
+				"FROM stadt_hausnummern AS sh JOIN strasse AS str ON sh.strasse_id = str.id " +
+				"JOIN stadt AS s ON sh.stadt_id = s.id " +
+				"JOIN gebiete AS g ON g.stadt_id = s.id " +
+				"JOIN jobs AS j ON j.gebiete_id = g.id " +
+				"WHERE " +
+				"j.id = ? AND ";
 				if(! parameterSubid.equals("-1"))
-					sqlqueryofficialhousenumbers += " (sh.sub_id = ? OR sh.sub_id = '-1') AND";
-				sqlqueryofficialhousenumbers += " sh.land_id = l.id AND";
-				sqlqueryofficialhousenumbers += " sh.stadt_id = s.id AND";
-				sqlqueryofficialhousenumbers += " sh.strasse_id = str.id AND";
-				sqlqueryofficialhousenumbers += " j.gebiete_id = g.id AND";
-				sqlqueryofficialhousenumbers += " g.stadt_id = s.id AND";
-				sqlqueryofficialhousenumbers += " ST_Within(point,?::geometry)";
-				if(parameterAdminlevel > 8) {
-					sqlqueryofficialhousenumbers += " AND j.id = ?";
-				}
-				sqlqueryofficialhousenumbers += " ORDER BY correctorder(strasse), hausnummer_sortierbar;";
+					sqlqueryofficialhousenumbers += "(sh.sub_id = ? OR sh.sub_id = '-1') AND ";
+				sqlqueryofficialhousenumbers += "ST_Within(point,?::geometry) ";
+				sqlqueryofficialhousenumbers += "ORDER BY correctorder(strasse), hausnummer_sortierbar;";
 
 				queryofficialhousenumbersStmt = con_hausnummern.prepareStatement(sqlqueryofficialhousenumbers);
-				preparedindex = 1;
-				queryofficialhousenumbersStmt.setString(preparedindex++, country);
-				listpreparedParameters += ", country='" + country + "'";
-				queryofficialhousenumbersStmt.setString(preparedindex++, municipality);
-				listpreparedParameters += ", municipality='" + municipality + "'";
-				if(! officialkeysid.equals("")) {
-					queryofficialhousenumbersStmt.setString(preparedindex++, officialkeysid);
-					listpreparedParameters += ", officialkeysid='" + officialkeysid + "'";
-				}
+				int preparedindex = 1;
 				queryofficialhousenumbersStmt.setLong(preparedindex++, jobid);
-				listpreparedParameters += ", jobid='" + jobid + "'";
 				if(! parameterSubid.equals("-1")) {
 					queryofficialhousenumbersStmt.setString(preparedindex++, parameterSubid);
-//check, if sub_id or job_id must be used here
-					listpreparedParameters += ", subid='" + parameterSubid + "'";
 				}
 				queryofficialhousenumbersStmt.setString(preparedindex++, polygon4326);
-				listpreparedParameters += ", polygon4326='...'";
-				if(parameterAdminlevel > 8) {
-					queryofficialhousenumbersStmt.setLong(preparedindex++, jobid);
-					listpreparedParameters += ", jobid='" + jobid + "'";
-				}
+				System.out.println("official housenumber list query, case officialgeocoord. " + queryofficialhousenumbersStmt.toString() + "===");
+				
 			} else if(parameterAdminlevel <= 8) {
-				sqlqueryofficialhousenumbers = "SELECT strasse, postcode, sh.hausnummer AS hausnummer,";
-				sqlqueryofficialhousenumbers += " sh.hausnummer_sortierbar AS hausnummer_sortierbar,";
-				sqlqueryofficialhousenumbers += " strasse, sub_id, ST_X(point) as lon, ST_Y(point) as lat, pointsource, hausnummer_bemerkung";
-				sqlqueryofficialhousenumbers += " FROM stadt_hausnummern AS sh,";
-				sqlqueryofficialhousenumbers += " strasse AS str,";
-				sqlqueryofficialhousenumbers += " stadt AS s,";
-				sqlqueryofficialhousenumbers +=	 " land as l";
-				sqlqueryofficialhousenumbers += " WHERE";
-				sqlqueryofficialhousenumbers += " land = ? AND";
-				sqlqueryofficialhousenumbers += " stadt = ? AND";
-				if(! officialkeysid.equals(""))
-					sqlqueryofficialhousenumbers += " officialkeys_id = ? AND";
+				sqlqueryofficialhousenumbers = "SELECT strasse, postcode, sh.hausnummer AS hausnummer, " +
+					"sh.hausnummer_sortierbar AS hausnummer_sortierbar, " +
+					"strasse, sh.sub_id, ST_X(point) as lon, ST_Y(point) as lat, pointsource, hausnummer_bemerkung " +
+					"FROM stadt_hausnummern AS sh JOIN strasse AS str ON sh.strasse_id = str.id " +
+					"JOIN stadt AS s ON sh.stadt_id = s.id " +
+					"JOIN gebiete AS g ON g.stadt_id = s.id " +
+					"JOIN jobs AS j ON j.gebiete_id = g.id " +
+					"WHERE " +
+					"j.id = ? ";
 				if(! parameterSubid.equals("-1"))
-					sqlqueryofficialhousenumbers += " (sub_id = ? OR sub_id = '-1') AND";
-				sqlqueryofficialhousenumbers += " sh.land_id = l.id AND";
-				sqlqueryofficialhousenumbers += " sh.stadt_id = s.id AND";
-				sqlqueryofficialhousenumbers += " sh.strasse_id = str.id";
+					sqlqueryofficialhousenumbers += "AND ((sh.sub_id = ?) OR (sh.sub_id = '-1')) ";
 				sqlqueryofficialhousenumbers += " ORDER BY correctorder(strasse), hausnummer_sortierbar;";
 
 				queryofficialhousenumbersStmt = con_hausnummern.prepareStatement(sqlqueryofficialhousenumbers);
-				preparedindex = 1;
-				queryofficialhousenumbersStmt.setString(preparedindex++, country);
-				listpreparedParameters += ", country='" + country + "'";
-				queryofficialhousenumbersStmt.setString(preparedindex++, municipality);
-				listpreparedParameters += ", municipality='" + municipality + "'";
-				if(! officialkeysid.equals("")) {
-					queryofficialhousenumbersStmt.setString(preparedindex++, officialkeysid);
-					listpreparedParameters += ", officialkeysid='" + officialkeysid + "'";
-				}
+				int preparedindex = 1;
+				queryofficialhousenumbersStmt.setLong(preparedindex++, jobid);
 				if(! parameterSubid.equals("-1")) {
 					queryofficialhousenumbersStmt.setString(preparedindex++, parameterSubid);
-					listpreparedParameters += ", subid='" + parameterSubid + "'";
 				}
+				System.out.println("official housenumber list query, case adminlevel <=8 " + queryofficialhousenumbersStmt.toString() + "===");
+
 			} else {
 					// if subadmin query for an official housenumber list, where 
 					// - the subadmin area is not given,
@@ -494,65 +420,55 @@ public class getHousenumberlist extends HttpServlet {
 					// then the official list must be filtered with the table jobs_strassen, where all osm streets (places are missing there up to now)
 					// are found within the subadmin area osm polygon
 					// this is the select statement for the dynamically selection of the housenumber list
-				sqlqueryofficialhousenumbers = "SELECT strasse, postcode, sh.hausnummer AS hausnummer,"
-					+ " sh.hausnummer_sortierbar AS hausnummer_sortierbar,"
-					+ " strasse, sub_id, ST_X(point) as lon, ST_Y(point) as lat, pointsource, hausnummer_bemerkung"
-					+ " FROM stadt_hausnummern AS sh"
-					+ " JOIN strasse AS str"
-					+ "   ON sh.strasse_id = str.id"
-					+ " LEFT JOIN"										// get all streets, which are completely outside subarea
-					+ "   (SELECT DISTINCT ON (strasse_id) strasse_id"
-					+ "    FROM jobs_strassen WHERE stadt_id = ? AND"
-					+ "      job_id = ? AND"
-					+ "      NOT ("		//complete outside subarea
-					+ "        ST_Within(linestring, ?::geometry) OR"
-					+ "        ST_Crosses(linestring, ?::geometry)"
-					+ "      )"
-					+ "   ) AS outsidestreets"
-					+ "   ON sh.strasse_id = outsidestreets.strasse_id"
-					+ " LEFT JOIN"										// get all OSM housenumbers, which are completely outside subarea
-					+ "   (SELECT DISTINCT ON (strasse_id, hausnummer_sortierbar) strasse_id, hausnummer_sortierbar"
-					+ "    FROM auswertung_hausnummern"
-					+ "    WHERE"
-					+ "      stadt_id = ? AND"
-					+ "      job_id = ? AND"
-					+ "      NOT ST_Within(point, ?::geometry)"		// only nodes, so no need for ST_Crosses()
-					+ "   ) AS outsidehousenumbers"
-					+ "   ON sh.strasse_id = outsidehousenumbers.strasse_id AND"
-					+ "      sh.hausnummer_sortierbar = outsidehousenumbers.hausnummer_sortierbar"
-					+ " WHERE"
-					+ " sh.stadt_id = ? AND"
-					+ " outsidestreets.strasse_id is null AND"		// in left join above, use only singles from stadt_hausnummern
-					+ " outsidehousenumbers.strasse_id is null";	// in left join above, use only single housenumberrs, which are inside subarea
+				sqlqueryofficialhousenumbers = "SELECT strasse, postcode, sh.hausnummer AS hausnummer, " +
+					"sh.hausnummer_sortierbar AS hausnummer_sortierbar, " +
+					"strasse, sub_id, ST_X(point) as lon, ST_Y(point) as lat, pointsource, hausnummer_bemerkung " +
+					"FROM stadt_hausnummern AS sh " +
+					"JOIN strasse AS str ON sh.strasse_id = str.id " +
+					"LEFT JOIN " +										// get all streets, which are completely outside subarea
+					"  (SELECT DISTINCT ON (strasse_id) strasse_id " +
+					"   FROM jobs_strassen WHERE stadt_id = ? AND " +
+					"     job_id = ? AND " +
+					"     NOT ( " +		//complete outside subarea
+					"       ST_Within(linestring, ?::geometry) OR " +
+					"       ST_Crosses(linestring, ?::geometry) " +
+					"      ) " +
+					"  ) AS outsidestreets " +
+					"  ON sh.strasse_id = outsidestreets.strasse_id " +
+					"LEFT JOIN " +										// get all OSM housenumbers, which are completely outside subarea
+					"  (SELECT DISTINCT ON (strasse_id, hausnummer_sortierbar) strasse_id, hausnummer_sortierbar " +
+					"   FROM auswertung_hausnummern " +
+					"   WHERE " +
+					"     stadt_id = ? AND " +
+					"     job_id = ? AND " +
+					"     NOT ST_Within(point, ?::geometry) " +		// only nodes, so no need for ST_Crosses()
+					"  ) AS outsidehousenumbers " +
+					"  ON sh.strasse_id = outsidehousenumbers.strasse_id AND " +
+					"     sh.hausnummer_sortierbar = outsidehousenumbers.hausnummer_sortierbar " +
+					"WHERE " +
+					"sh.stadt_id = ? AND " +
+					"outsidestreets.strasse_id is null AND " +		// in left join above, use only singles from stadt_hausnummern
+					"outsidehousenumbers.strasse_id is null";	// in left join above, use only single housenumberrs, which are inside subarea
 				if(! parameterSubid.equals("-1"))
 					sqlqueryofficialhousenumbers += " AND (sub_id = ? OR sub_id = '-1')";
 				sqlqueryofficialhousenumbers += " ORDER BY correctorder(strasse), hausnummer_sortierbar;";
 
 				queryofficialhousenumbersStmt = con_hausnummern.prepareStatement(sqlqueryofficialhousenumbers);
-				preparedindex = 1;
+				int preparedindex = 1;
 				queryofficialhousenumbersStmt.setLong(preparedindex++, municipalityId);
-				listpreparedParameters += ", municipalityId=" + municipalityId + " (for " + municipality + ")";
 				queryofficialhousenumbersStmt.setLong(preparedindex++, municipalityJobId);
-				listpreparedParameters += ", municipalityJobId=" + municipalityJobId + " (for " + municipalityJobname + ")";
 				queryofficialhousenumbersStmt.setString(preparedindex++, polygon900913);
-				listpreparedParameters += ", polygon900913='...'";
 				queryofficialhousenumbersStmt.setString(preparedindex++, polygon900913);
-				listpreparedParameters += ", polygon900913='...'";
 				queryofficialhousenumbersStmt.setLong(preparedindex++, municipalityId);
-				listpreparedParameters += ", municipalityId=" + municipalityId + " (for " + municipality + ")";
 				queryofficialhousenumbersStmt.setLong(preparedindex++, municipalityJobId);
-				listpreparedParameters += ", municipalityJobId=" + municipalityJobId + " (for " + municipalityJobname + ")";
 				queryofficialhousenumbersStmt.setString(preparedindex++, polygon4326);
-				listpreparedParameters += ", polygon4326='...'";
 				queryofficialhousenumbersStmt.setLong(preparedindex++, municipalityId);
-				listpreparedParameters += ", municipalityId=" + municipalityId + " (for " + municipality + ")";
 				if(! parameterSubid.equals("-1")) {
 					queryofficialhousenumbersStmt.setString(preparedindex++, parameterSubid);
-					listpreparedParameters += ", subid='" + parameterSubid + "'";
 				}
+				System.out.println("official housenumber list query, else case: " + queryofficialhousenumbersStmt.toString() + "===");
 			}
 
-			System.out.println("official housenumber list query: Parameters " + listpreparedParameters + "     ===" + sqlqueryofficialhousenumbers + "===");
 
 			ResultSet rsqueryofficialhousenumbers = queryofficialhousenumbersStmt.executeQuery();
 
@@ -578,8 +494,8 @@ public class getHousenumberlist extends HttpServlet {
 					dataoutput.append("#Para Officialkeysid=" + officialkeysid + "\n");
 					dataoutput.append("#Para OSMHierarchy=" + osmhierarchy + "\n");
 					dataoutput.append("#Para sourcelisturl=" + sourcelisturl + "\n");
-					dataoutput.append("#Para sourcelistcopyrighttext=" + sourcelistcopyrighttext + "\n");
-					dataoutput.append("#Para sourcelistuseagetext=" + sourcelistuseagetext + "\n");
+					dataoutput.append("#Para legal Copyright Text=" + sourcelistcopyrighttext + "\n");
+					dataoutput.append("#Para legal Useage Note=" + sourcelistuseagetext + "\n");
 					dataoutput.append("#Para sourcelistcontentdate=" + sourcelistcontentdate + "\n");
 					dataoutput.append("#Para sourcelistfiledate=" + sourcelistfiledate + "\n");
 				}
