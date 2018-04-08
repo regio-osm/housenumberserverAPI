@@ -155,6 +155,7 @@ public class Upload extends HttpServlet {
 			String municipality = map.getParameter("Municipality");
 			String officialkeysId = map.getParameter("Officialkeysid");
 			String jobname = map.getParameter("Jobname");
+			String jobid = map.getParameter("Jobid");
 			String serverobjectid = map.getParameter("Serverobjectid");
 			File file = map.getFile("result");
 			System.out.println("temporary file ===" + file.getAbsoluteFile() + "===");
@@ -187,6 +188,7 @@ public class Upload extends HttpServlet {
 			System.out.println(" municipality   ===" + municipality + "===");
 			System.out.println(" officialkeysId ===" + officialkeysId + "===");
 			System.out.println(" jobname        ===" + jobname + "===");
+			System.out.println(" jobid          ===" + jobid + "===");
 			System.out.println(" content length ===" + content.length() + "===");
 			System.out.println(" content file line no ===" + linenumbers + "===");
 
@@ -234,6 +236,7 @@ public class Upload extends HttpServlet {
 			writer.println(" municipality   ===" + municipality + "===");
 			writer.println(" officialkeysId ===" + officialkeysId + "===");
 			writer.println(" jobname        ===" + jobname + "===");
+			writer.println(" jobid          ===" + jobid + "===");
 			writer.println(" content length ===" + content.length() + "===");
 
 			writer.println("<body>");

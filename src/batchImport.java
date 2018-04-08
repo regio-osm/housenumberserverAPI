@@ -19,7 +19,7 @@ import java.sql.Timestamp;
 import java.text.DateFormat;
 import java.util.*;
 
-import de.regioosm.housenumberserverAPI.Applicationconfiguration;
+import de.regioosm.housenumberserverAPI.*;
 
 
 /**
@@ -101,9 +101,10 @@ public class batchImport {
 		try {
 			int countryid = 0;
 			String country = "";
+			String countrycode = "";
 			int municipalityid = 0;
 			String municipality = "";
-			int jobid = 0;
+			Long jobid = 0L;
 			String jobname = "";
 			String officialkeysId = "";
 			Integer adminlevel = 0;
@@ -150,6 +151,9 @@ public class batchImport {
 						if(key.equals("Jobname")) {
 							jobname = value;
 						}
+						if(key.equals("Jobid")) {
+							jobid = Long.parseLong(value);
+						}
 						if(key.equals("Officialkeysid")) {
 							officialkeysId = value;
 						}
@@ -163,14 +167,10 @@ public class batchImport {
 			if(officialkeysId.equals(""))
 				officialkeysId = "%";
 
-			Class.forName("org.postgresql.Driver");
-	
-			String url_hausnummern = configuration.db_application_url;
-			con_hausnummern = DriverManager.getConnection(url_hausnummern, configuration.db_application_username, configuration.db_application_password);
 
 			System.out.println("beginn von insertfkt");
 			
-			String select_sql = "SELECT land.id AS countryid, land,"
+			String select_sql = "SELECT land.id AS countryid, land, countrycode,"
 				+ " stadt.id AS municipalityid, stadt, officialkeys_id, admin_level,"
 				+ " ST_AsText(polygon) AS polygon_astext, ST_SRID(polygon) AS polygon_srid,"
 				+ " jobs.id AS jobid, jobname"
@@ -178,20 +178,25 @@ public class batchImport {
 				+ " land = ?"
 				+ " AND stadt = ?"
 				+ " AND jobname = ?"
-				+ " AND officialkeys_id like ?";
-				if(adminlevel != 0)
-					select_sql += " AND admin_level = ?";
-				select_sql += " AND gebiete.stadt_id = stadt.id"
-				+ " AND jobs.gebiete_id = gebiete.id"
-				+ " ORDER BY admin_level;";
+				+ " AND officialkeys_id like ?"
+				+ " AND gebiete.stadt_id = stadt.id"
+				+ " AND jobs.gebiete_id = gebiete.id";
+			if(jobid != 0L)
+				select_sql += " AND jobs.id = ?";
+			if(adminlevel != 0)
+				select_sql += " AND admin_level = ?";
+			select_sql += " ORDER BY admin_level;";
 
 			PreparedStatement selectqueryStmt = con_hausnummern.prepareStatement(select_sql);
-			selectqueryStmt.setString(1, country);
-			selectqueryStmt.setString(2, municipality);
-			selectqueryStmt.setString(3, jobname);
-			selectqueryStmt.setString(4, officialkeysId);
+			Integer selectqueryParameterIndex = 1;
+			selectqueryStmt.setString(selectqueryParameterIndex++, country);
+			selectqueryStmt.setString(selectqueryParameterIndex++, municipality);
+			selectqueryStmt.setString(selectqueryParameterIndex++, jobname);
+			selectqueryStmt.setString(selectqueryParameterIndex++, officialkeysId);
+			if(jobid != 0L)
+				selectqueryStmt.setLong(selectqueryParameterIndex++, jobid);
 			if(adminlevel != 0)
-				selectqueryStmt.setInt(5, adminlevel);
+				selectqueryStmt.setInt(selectqueryParameterIndex++, adminlevel);
 			System.out.println("Info: get municipality data ...");
 			ResultSet existingmunicipalityRS = selectqueryStmt.executeQuery();
 
@@ -203,9 +208,11 @@ public class batchImport {
 				countHits++;
 				countryid = existingmunicipalityRS.getInt("countryid");
 				country = existingmunicipalityRS.getString("land");
+				countrycode = existingmunicipalityRS.getString("countrycode");
 				municipalityid = existingmunicipalityRS.getInt("municipalityid");
 				municipality = existingmunicipalityRS.getString("stadt");
-				jobid = existingmunicipalityRS.getInt("jobid");
+				adminlevel = existingmunicipalityRS.getInt("admin_level");
+				jobid = existingmunicipalityRS.getLong("jobid");
 				jobname = existingmunicipalityRS.getString("jobname");
 				polygonAsText = existingmunicipalityRS.getString("polygon_astext");
 				polygonSrid = existingmunicipalityRS.getInt("polygon_srid");
@@ -217,7 +224,7 @@ public class batchImport {
 				System.out.println("Error: more than one related jobs were found, CANCEL import ...");
 				System.out.println(moreThanOneRowContent.toString());
 				selectqueryStmt.close();
-				con_hausnummern.close();
+				con_hausnummern.rollback();
 				return false;
 			} else if(countHits == 0) {
 				selectqueryStmt.close();
@@ -225,7 +232,6 @@ public class batchImport {
 				System.out.println("  country ===" + country + "===, municipality ===" 
 						+ municipality + "===, officialkeysId ===" + officialkeysId + "===, jobname ===" + jobname + "===");
 				selectqueryStmt.close();
-				con_hausnummern.close();
 				return false;
 			}
 			
@@ -244,23 +250,24 @@ public class batchImport {
 			try {
 				deletelastevaluationStmt.setInt(1, countryid);
 				deletelastevaluationStmt.setInt(2, municipalityid);
-				deletelastevaluationStmt.setInt(3, jobid);
+				deletelastevaluationStmt.setLong(3, jobid);
 				deletelastevaluationStmt.executeUpdate();
 			}
 			catch( SQLException e) {
-				System.out.println("ERROR, when tried to delete rows for old evaluation, but import will continue");
+				System.out.println("ERROR, when tried to delete rows for old evaluation.");
 				e.printStackTrace();
+				return false;
 			}
 			deletelastevaluationStmt.close();
 
-				// delete all job entries in exporthnr2shape
+				// delete all job entries in 	hnr2shape
 			String deleteLastEvaluationMapResultsql = "DELETE FROM exporthnr2shape";
 			deleteLastEvaluationMapResultsql  += " WHERE";
 			deleteLastEvaluationMapResultsql  += " job_id = ?;";
 			PreparedStatement deleteLastEvaluationMapResultStmt = con_hausnummern.prepareStatement(deleteLastEvaluationMapResultsql);
 			System.out.println("Info: delete old evaluation in table exporthnr2shape ...");
 			try {
-				deleteLastEvaluationMapResultStmt.setInt(1, jobid);
+				deleteLastEvaluationMapResultStmt.setLong(1, jobid);
 				deleteLastEvaluationMapResultStmt.executeUpdate();
 			}
 			catch( SQLException e) {
@@ -341,8 +348,9 @@ public class batchImport {
 				+ " ?, ?, ?);";
 			PreparedStatement inserthousenumberWithoutGeometryStmt = con_hausnummern.prepareStatement(inserthousenumberWithoutGeometrySql);
 
+
 			
-				// change to transaction mode
+			// change to transaction mode
 			con_hausnummern.setAutoCommit(false);
 
 				// store column names, below found in file header line
@@ -494,12 +502,14 @@ public class batchImport {
 						catch( SQLException e) {
 							System.out.println("ERROR: during insert in table evaluation_overview, insert code was ===" + insertstreetsql + "===");
 							System.out.println(e.toString());
+							con_hausnummern.rollback();
+							return false;
 						}
 					}
 				}
 
 				if(! previousStreet.equals(actStreet) && ! previousStreet.equals("")) {
-					selectOSMStreetGeometryStmt.setInt(1, jobid);
+					selectOSMStreetGeometryStmt.setLong(1, jobid);
 					selectOSMStreetGeometryStmt.setInt(2, street_idlist.get(previousStreet));
 					try {
 						Integer insertStreetResultParameterIndex = 1;
@@ -530,7 +540,6 @@ public class batchImport {
 								
 								insertStreetResultStmt.setInt(insertStreetResultParameterIndex++, hausnummernFertigProzent);
 								insertStreetResultParameters += ", hnr_abdeck=" + hausnummernFertigProzent;
-
 								insertStreetResultStmt.setString(insertStreetResultParameterIndex++, actStreetMissingHousenumbers.toString());
 								insertStreetResultParameters += ", hnr_liste=" + actStreetMissingHousenumbers.toString();
 								insertStreetResultStmt.setString(insertStreetResultParameterIndex++, selectOSMStreetGeometryRS.getString("linestring900913"));
@@ -542,6 +551,8 @@ public class batchImport {
 								catch( SQLException e) {
 									System.out.println("ERROR: during insert in table exporthrn2shape, insert code was ===" + insertStreetResultSql + "===");
 									e.printStackTrace();
+									con_hausnummern.rollback();
+									return false;
 								}
 							} else {
 								System.out.println("WARNUNG: leeres Polygon in jobs_strassen id: " + selectOSMStreetGeometryRS.getLong("id"));
@@ -551,6 +562,8 @@ public class batchImport {
 					catch( SQLException e) {
 						System.out.println("ERROR: during insert in table evaluation_overview, insert code was ===" + insertstreetsql + "===");
 						System.out.println(e.toString());
+						con_hausnummern.rollback();
+						return false;
 					}
 					actStreetMissingHousenumbers = new StringBuffer();
 					street_hittype_i = 0;
@@ -575,7 +588,7 @@ public class batchImport {
 				if(actlon == 0.0D) {
 					inserthousenumberWithoutGeometryStmt.setInt(1, countryid);
 					inserthousenumberWithoutGeometryStmt.setInt(2, municipalityid);
-					inserthousenumberWithoutGeometryStmt.setInt(3, jobid);
+					inserthousenumberWithoutGeometryStmt.setLong(3, jobid);
 					inserthousenumberWithoutGeometryStmt.setString(4,country);
 					inserthousenumberWithoutGeometryStmt.setString(5, municipality);
 					inserthousenumberWithoutGeometryStmt.setString(6, jobname);
@@ -599,7 +612,7 @@ public class batchImport {
 				} else {
 					inserthousenumberWithGeometryStmt.setInt(1, countryid);
 					inserthousenumberWithGeometryStmt.setInt(2, municipalityid);
-					inserthousenumberWithGeometryStmt.setInt(3, jobid);
+					inserthousenumberWithGeometryStmt.setLong(3, jobid);
 					inserthousenumberWithGeometryStmt.setString(4,country);
 					inserthousenumberWithGeometryStmt.setString(5, municipality);
 					inserthousenumberWithGeometryStmt.setString(6, jobname);
@@ -622,6 +635,8 @@ public class batchImport {
 					catch( SQLException e) {
 						System.out.println("ERROR: during insert in table auswertung_hausnummern, insert code was ===" + inserthousenumberWithGeometrySql + "===");
 						e.printStackTrace();
+						con_hausnummern.rollback();
+						return false;
 					}
 				}
 			} // end of loop over all content lines
@@ -645,7 +660,7 @@ public class batchImport {
 				// store result of actual job evaluation in evaluations overview table, including timestamps for evalation time and time of local osm db 
 			insertEvaluationResultStmt.setInt(1, countryid);
 			insertEvaluationResultStmt.setInt(2, municipalityid);
-			insertEvaluationResultStmt.setInt(3, jobid);
+			insertEvaluationResultStmt.setLong(3, jobid);
 			insertEvaluationResultStmt.setInt(4, (countHousenumbersListonly + countHousenumbersIdentical));
 			insertEvaluationResultStmt.setInt(5, countHousenumbersIdentical);
 			insertEvaluationResultStmt.setInt(6, countHousenumbersOsmonly);
@@ -662,6 +677,8 @@ public class batchImport {
 			catch( SQLException e) {
 				System.out.println("ERROR: during insert in table osmhausnummern_hausnummern identische, insert code was ===" + insertEvaluationResultSql + "===");
 				e.printStackTrace();
+				con_hausnummern.rollback();
+				return false;
 			}
 			insertEvaluationResultStmt.close();
 
@@ -669,12 +686,21 @@ public class batchImport {
 				+ " WHERE land_id = ? AND stadt_id = ? AND job_id = ?;";
 			PreparedStatement selectEvaluationResultMapStmt = con_hausnummern.prepareStatement(EvaluationResultMapSql);
 			System.out.println("Info: store evaluation result in table exportjobs2shape ...");
+
+				// set visibility flag depending of municipality area (1) or sub-municipality area (2)
+			Integer evallevel = 1;
+				// if subarea of municipality, set visibility flag to second priority
+			if(adminlevel > 8)
+				evallevel = 2;
+			// if subarea of municipality in Poland (8 instead of standard level 9), set visibility flag to second priority
+			if((adminlevel == 8) && (countrycode.equals("PL")))
+				evallevel = 2;
 			
 				// store result of actual job evaluation in evaluations overview table for Map, including timestamps for evalation time and time of local osm db 
 			try {
 				selectEvaluationResultMapStmt.setInt(1, countryid);
 				selectEvaluationResultMapStmt.setInt(2, municipalityid);
-				selectEvaluationResultMapStmt.setInt(3, jobid);
+				selectEvaluationResultMapStmt.setLong(3, jobid);
 				//System.out.println("select evaluation result map statement ===" + EvaluationResultMapSql + "===");
 				java.util.Date time_beforeinsert = new java.util.Date();
 				ResultSet selectEvaluationResultMapRs = selectEvaluationResultMapStmt.executeQuery();
@@ -683,6 +709,7 @@ public class batchImport {
 						+ " SET stadtbezrk = ?, hnr_soll = ?, hnr_osm = ?,"
 						+ " hnr_fhlosm = ?, hnr_nurosm = ?, hnr_abdeck = ?,"
 						+ " polygon = ST_Transform(ST_Geomfromtext(?, ?), 4326),"
+						+ " evallevel = ?,"
 						+ " timestamp = now()"
 						+ " WHERE land_id = ? AND stadt_id = ? AND job_id = ?;";
 					PreparedStatement updateEvaluationResultMapStmt = con_hausnummern.prepareStatement(EvaluationResultMapSql);
@@ -694,28 +721,30 @@ public class batchImport {
 					updateEvaluationResultMapStmt.setInt(6, (int)(Math.round(resultpercentfulfilled * 10.0) / 10.0));
 					updateEvaluationResultMapStmt.setString(7, polygonAsText);
 					updateEvaluationResultMapStmt.setInt(8, polygonSrid);
-					updateEvaluationResultMapStmt.setInt(9, countryid);
-					updateEvaluationResultMapStmt.setInt(10, municipalityid);
-					updateEvaluationResultMapStmt.setInt(11, jobid);
+					updateEvaluationResultMapStmt.setInt(9, evallevel);
+					updateEvaluationResultMapStmt.setInt(10, countryid);
+					updateEvaluationResultMapStmt.setInt(11, municipalityid);
+					updateEvaluationResultMapStmt.setLong(12, jobid);
 					updateEvaluationResultMapStmt.executeUpdate();
 					updateEvaluationResultMapStmt.close();
 				} else {
 					EvaluationResultMapSql = "INSERT INTO exportjobs2shape"
 						+ " (land_id, stadt_id, job_id, stadtbezrk, hnr_soll, hnr_osm,"
-						+ " hnr_fhlosm, hnr_nurosm, hnr_abdeck, timestamp, polygon)"
-						+ " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, now(), ST_Transform(ST_Geomfromtext(?, ?), 4326));";
+						+ " hnr_fhlosm, hnr_nurosm, hnr_abdeck, evallevel, timestamp, polygon)"
+						+ " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, now(), ST_Transform(ST_Geomfromtext(?, ?), 4326));";
 					PreparedStatement insertEvaluationResultMapStmt = con_hausnummern.prepareStatement(EvaluationResultMapSql);
 					insertEvaluationResultMapStmt.setInt(1, countryid);
 					insertEvaluationResultMapStmt.setInt(2, municipalityid);
-					insertEvaluationResultMapStmt.setInt(3, jobid);
+					insertEvaluationResultMapStmt.setLong(3, jobid);
 					insertEvaluationResultMapStmt.setString(4, jobname);
 					insertEvaluationResultMapStmt.setInt(5, (countHousenumbersListonly + countHousenumbersIdentical));
 					insertEvaluationResultMapStmt.setInt(6, countHousenumbersIdentical);
 					insertEvaluationResultMapStmt.setInt(7, countHousenumbersListonly);
 					insertEvaluationResultMapStmt.setInt(8, countHousenumbersOsmonly);
 					insertEvaluationResultMapStmt.setInt(9, (int)(Math.round(resultpercentfulfilled * 10.0) / 10.0));
-					insertEvaluationResultMapStmt.setString(10, polygonAsText);
-					insertEvaluationResultMapStmt.setInt(11, polygonSrid);
+					insertEvaluationResultMapStmt.setInt(10, evallevel);
+					insertEvaluationResultMapStmt.setString(11, polygonAsText);
+					insertEvaluationResultMapStmt.setInt(12, polygonSrid);
 					insertEvaluationResultMapStmt.executeUpdate();
 					insertEvaluationResultMapStmt.close();
 				}
@@ -726,6 +755,8 @@ public class batchImport {
 			catch( SQLException e) {
 				System.out.println("ERROR: during select result overview map entry, select code was ===" + EvaluationResultMapSql + "===");
 				e.printStackTrace();
+				con_hausnummern.rollback();
+				return false;
 			}
 
 				// if job is from jobqueue table, then update state of job
@@ -762,27 +793,16 @@ public class batchImport {
 
 			selectqueryStmt.close();
 
-			con_hausnummern.close();
-
 			System.out.println("loaded streets from official housenumberlist: " + numberStreetsFromOfficialList);
 			System.out.println("loaded streets dynamically: " + numberStreetsLoadedDynamically);
 			System.out.println("inserted new streets into DB: " + numberStreetInsertedIntoDB);
 
-		} // end of try to connect to DB and operate with DB
-		catch(ClassNotFoundException e) {
-			e.printStackTrace();
-			System.exit(1);
 		}
 		catch( SQLException e) {
-			e.printStackTrace();
-			try {
-				con_hausnummern.close();
-			} catch( SQLException innere) {
-				System.out.println("inner sql-exception (tried to to close connection ...");
-				innere.printStackTrace();
-			}
+			System.out.println("SQL Error occured, before transaction started. Import will be ignored");
 			return false;
 		}
+
 		System.out.println("time for insertResultIntoDBouter in sek: " + (new Date().getTime() - insertResultIntoDBouter.getTime())/1000);
 		return true;
 	}
@@ -828,11 +848,23 @@ public class batchImport {
 		
 		DateFormat dateformat = DateFormat.getDateTimeInstance();
 
-		
-		String filename = "";
-		String importworkPathandFilename = resultfiles_uploadpath + File.separator + "batchimport.active";
-		String importworkoutputline = "";
 		try {
+			Class.forName("org.postgresql.Driver");
+		} // end of try to connect to DB and operate with DB
+		catch(ClassNotFoundException e) {
+			e.printStackTrace();
+			System.exit(1);
+		}
+		
+		try {
+
+			String url_hausnummern = configuration.db_application_url;
+			con_hausnummern = DriverManager.getConnection(url_hausnummern, configuration.db_application_username, configuration.db_application_password);
+		
+			String filename = "";
+			String importworkPathandFilename = resultfiles_uploadpath + File.separator + "batchimport.active";
+			String importworkoutputline = "";
+
 			File importworkPathandFilenameHandle = new File(importworkPathandFilename);
 			if(importworkPathandFilenameHandle.exists() && !importworkPathandFilenameHandle.isDirectory()) {
 				System.out.println("Batchimport already active, stopp processign of this program");
@@ -900,11 +932,15 @@ public class batchImport {
 				importworkPathandFilenameHandle.renameTo(destinationworkPathandFilenameHandle);
 				System.out.println("Batchimport progress file renamed to finish-state");
 			}
+
+			con_hausnummern.close();
+
 		} catch (IOException ioerror) {
 			System.out.println("ERORR: IOException happened, details follows ...");
-			System.out.println(" .. couldn't open file to write, filename was ===" + filename + "===");
-			System.out.println(" .. couldn't open file to write, filename was ===" + ioerror.toString() + "===");
 			ioerror.printStackTrace();
+		} catch (SQLException sqlerror) {
+			System.out.println("ERORR: SQLException happened, details follows ...");
+			sqlerror.printStackTrace();
 		}
 	}
 }

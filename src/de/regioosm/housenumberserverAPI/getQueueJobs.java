@@ -64,7 +64,7 @@ public class getQueueJobs extends HttpServlet {
      * initialization on servlett startup
      */
     public void 	init(ServletConfig config) {
-    	System.out.println("\n\nok, servlet " + config.getServletName() + " will be initialized now ...\n");
+    	System.out.println("\n\nok, servlet v20170107 " + config.getServletName() + " will be initialized now ...\n");
 
 		String path = config.getServletContext().getRealPath("/WEB-INF");
 		configuration = new Applicationconfiguration(path);
@@ -125,6 +125,7 @@ public class getQueueJobs extends HttpServlet {
 	 */
 	protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
 
+		String select_queuejobssql = "";
 		String select_sql = "";
 		String existingpreparedParameters = "";
 
@@ -132,7 +133,7 @@ public class getQueueJobs extends HttpServlet {
 		ResultSet queuejobsqueryRS = null;
 		
 		try {
-			System.out.println("\nBeginn getQueueJobs/doPost ... " + new Date());
+			System.out.println("\nBeginn getQueueJobs/doPost v20170107 ... " + new Date());
 			System.out.println("request komplett ===" + request.toString() + "===");
 
 			MultipartMap map = new MultipartMap(request, this);
@@ -152,7 +153,7 @@ public class getQueueJobs extends HttpServlet {
 			System.out.println(" maxjobcount   ===" + maxjobcount + "===");
 
 
-			String select_queuejobssql = "SELECT jq.id AS id, jq.countrycode AS countrycode, municipality, jobname, requestreason,"
+			select_queuejobssql = "SELECT jq.id AS id, jq.countrycode AS countrycode, municipality, jobname, requestreason,"
 				+ " requesttime, scheduletime, priority, state"
 				+ " FROM jobqueue AS jq, land AS l WHERE"
 				+ " state = 'open' AND"
@@ -189,7 +190,7 @@ public class getQueueJobs extends HttpServlet {
 			String actoutputline = "";
 			
 			actoutputline = "#" + "Country\tCountrycode\tMunicipality\tMunicipality-Id\tAdmin-Level"
-				+ "\tJobname\tSubarea-Id\tOSM-Relation-Id\tJobqueue-Id\n";
+				+ "\tJobname\tSubarea-Id\tOSM-Relation-Id\tJobqueue-Id\tJobid\n";
 			dataoutput.append(actoutputline);
 			
 			Integer rowcount = 0;
@@ -248,7 +249,9 @@ public class getQueueJobs extends HttpServlet {
 						+ jobQueryRS.getString("jobname") + "\t"
 						+ jobQueryRS.getString("sub_id") + "\t"
 						+ osm_id + "\t"
-						+ "jobqueue:"+ queuejobsqueryRS.getInt("id") + "\n";
+						+ "jobqueue:"+ queuejobsqueryRS.getInt("id") + "\t"
+						+ jobQueryRS.getString("jobid")
+						+ "\n";
 					dataoutput.append(actoutputline);
 					System.out.println("rowcount now " + (rowcount + 1) + ":   dataoutput.append now with ===" + actoutputline + "===    length: " + dataoutput.length());
 					rowcount++;
@@ -287,6 +290,7 @@ public class getQueueJobs extends HttpServlet {
 			System.out.println("SQLException happened, details follows ...");
 			System.out.println("sql query parameters ===" + existingpreparedParameters + "===");
 			System.out.println("sql query was probably ===" + select_sql + "===");
+			System.out.println("sql job-query was probably ===" + select_queuejobssql + "===");
 			e.printStackTrace();
 			try {
 				if(queuejobsqueryRS != null)
