@@ -860,6 +860,7 @@ public class batchImport {
 
 			String url_hausnummern = configuration.db_application_url;
 			con_hausnummern = DriverManager.getConnection(url_hausnummern, configuration.db_application_username, configuration.db_application_password);
+			con_hausnummern.setClientInfo("ApplicationName", batchImport.class.getName());
 		
 			String filename = "";
 			String importworkPathandFilename = resultfiles_uploadpath + File.separator + "batchimport.active";
@@ -867,7 +868,7 @@ public class batchImport {
 
 			File importworkPathandFilenameHandle = new File(importworkPathandFilename);
 			if(importworkPathandFilenameHandle.exists() && !importworkPathandFilenameHandle.isDirectory()) {
-				System.out.println("Batchimport already active, stopp processign of this program");
+				System.out.println("Batchimport already active, stopp processing of this program");
 				return;
 			}
 			PrintWriter workprogressOutput = new PrintWriter(new BufferedWriter(new OutputStreamWriter(
@@ -875,11 +876,14 @@ public class batchImport {
 			workprogressOutput.println("Start of batchimport: " + dateformat.format(new Date()));
 			workprogressOutput.close();
 
+			System.out.println("Start of batchimport: " + dateformat.format(new Date()));
+			
 			File dir_filestructure = new File(resultfiles_uploadpath);
 
 			String[] dirrelative_stringarray = dir_filestructure.list();
 			System.out.println("Number of entries in directory: "+dirrelative_stringarray.length+" in Directory ==="+resultfiles_uploadpath+"===");
 			for(Integer diri=0;diri<dirrelative_stringarray.length;diri++) {
+				System.out.println("import progress: file # " + diri + " of " + dirrelative_stringarray.length);
 				String actualFilename = dirrelative_stringarray[diri];
 				String actual_entry = resultfiles_uploadpath + File.separator + actualFilename;
 				File actual_filehandle = new File(actual_entry);

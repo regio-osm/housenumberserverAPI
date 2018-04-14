@@ -94,7 +94,7 @@ public class getHousenumberlist extends HttpServlet {
 	private static final long serialVersionUID = 1L;
 		// load content of configuration file, which contains filesystem entries and database connection details
 	static Applicationconfiguration configuration;
-	static Connection con_hausnummern;
+	static Connection housenumberConn;
 
     /**
      * @see HttpServlet#HttpServlet()
@@ -118,7 +118,7 @@ public class getHousenumberlist extends HttpServlet {
 			Class.forName("org.postgresql.Driver");
 			
 			String url_hausnummern = configuration.db_application_url;
-			con_hausnummern = DriverManager.getConnection(url_hausnummern, configuration.db_application_username, configuration.db_application_password);
+			housenumberConn = DriverManager.getConnection(url_hausnummern, configuration.db_application_username, configuration.db_application_password);
 		} 
 		catch(ClassNotFoundException e) {
 			e.printStackTrace();
@@ -138,7 +138,7 @@ public class getHousenumberlist extends HttpServlet {
     	System.out.println("\n\nok, servlet will be destroyed now ...\n");
 
     	try {
-    		con_hausnummern.close();
+    		housenumberConn.close();
 			System.out.println("after closed DB-Connection");
     	}
 		catch( SQLException e) {
@@ -175,12 +175,12 @@ public class getHousenumberlist extends HttpServlet {
 		java.util.Date requestEndtime;
 
 		try {
-			if(		(con_hausnummern == null) || (con_hausnummern.getMetaData() == null) || (con_hausnummern.getMetaData().getURL() == null) 
-				|| 	con_hausnummern.getMetaData().getURL().equals("")) {
+			if(		(housenumberConn == null) || (housenumberConn.getMetaData() == null) || (housenumberConn.getMetaData().getURL() == null) 
+				|| 	housenumberConn.getMetaData().getURL().equals("")) {
 				Class.forName("org.postgresql.Driver");
 				
 				String url_hausnummern = configuration.db_application_url;
-				con_hausnummern = DriverManager.getConnection(url_hausnummern, configuration.db_application_username, configuration.db_application_password);
+				housenumberConn = DriverManager.getConnection(url_hausnummern, configuration.db_application_username, configuration.db_application_password);
 			}
 		} 
 		catch(ClassNotFoundException e) {
@@ -196,7 +196,7 @@ public class getHousenumberlist extends HttpServlet {
 		try {
 			requestStarttime = new java.util.Date();
 
-			System.out.println("\n\nBeginn getHousenumberlist/doPost v20180408 at " + requestStarttime.toString() + " ...");
+			System.out.println("\n\nBeginn getHousenumberlist/doPost v20180511 at " + requestStarttime.toString() + " ...");
 			System.out.println("request komplett ===" + request.toString() + "===");
 
 			String parameterCountry = URLDecoder.decode(request.getParameter("country"),"UTF-8");
@@ -221,33 +221,36 @@ public class getHousenumberlist extends HttpServlet {
 			System.out.println(" request encoding ===" + request.getCharacterEncoding());
 			
 
-			String selectMunicipalitySql = "SELECT land, stadt, s.id as stadt_id, osm_hierarchy, officialkeys_id, " +
+			String selectMunicipalitySql = "SELECT land, stadt, muni.id as stadt_id, osm_hierarchy, officialkeys_id, " +
 				"sourcelist_url, sourcelist_copyrighttext, sourcelist_useagetext, " +
 				"sourcelist_contentdate, sourcelist_filedate, " +
+				"subareajobs.admin_level, subareajobs.osm_id, " +
 				"officialgeocoordinates, " +
-				"j.id as municipality_jobid, jobname AS municipality_jobname " + 		//optional available columns (if gebiete and job creation run already) with job_id and name of municipality itself
-				"FROM stadt AS s " +
-				"JOIN land as l " +
-				"  ON s.land_id = l.id " +
+				"jobs.id as municipality_jobid, jobname AS municipality_jobname " + 		//optional available columns (if gebiete and job creation run already) with job_id and name of municipality itself
+				"FROM stadt AS muni " +
+				"JOIN land as country " +
+				"  ON muni.land_id = country.id " +
 				"LEFT JOIN " +
-				"  (SELECT  gebiete.id AS id, name, stadt_id FROM gebiete " +
-				"   JOIN stadt on gebiete.stadt_id = stadt.id " +
-				"   JOIN land on stadt.land_id = land.id " +
+				"  (SELECT  subarea.id AS id, name, admin_level, osm_id, subarea.stadt_id FROM " +
+				"   jobs JOIN gebiete AS subarea ON jobs.gebiete_id = subarea.id " +
+				"   JOIN stadt AS muni ON subarea.stadt_id = muni.id " +
+				"   JOIN land AS country ON muni.land_id = country.id " +
 				"     WHERE land = ? AND " +
 				"     stadt = ? ";
 			if(! parameterOfficialkeysid.equals(""))
 				selectMunicipalitySql += "      AND officialkeys_id = ? ";
-			selectMunicipalitySql += "      ORDER BY admin_level::int LIMIT 1) AS gebietejobs " +		// just get most top admin_level row of gebiete
-				"  ON gebietejobs.stadt_id = s.id " +
-				"LEFT JOIN jobs AS j " +
-				"  ON j.gebiete_id = gebietejobs.id " +
+			selectMunicipalitySql += "      ORDER BY admin_level::int LIMIT 1) AS subareajobs " +		// just get most top admin_level row of gebiete
+				"  ON subareajobs.stadt_id = muni.id " +
+				"LEFT JOIN jobs " +
+				"  ON jobs.gebiete_id = subareajobs.id " +
 				"WHERE " +
-				" j.id = ? ";
+				"country.land = ? " + 
+				"AND muni.stadt = ? ";
 			if(! parameterOfficialkeysid.equals(""))
 				selectMunicipalitySql += "AND officialkeys_id = ? ";
 			selectMunicipalitySql += ";";
 
-			PreparedStatement selectMunicipalityStmt = con_hausnummern.prepareStatement(selectMunicipalitySql);
+			PreparedStatement selectMunicipalityStmt = housenumberConn.prepareStatement(selectMunicipalitySql);
 
 			int preparedmuniindex = 1;
 			String munipreparedParameters = "";
@@ -256,7 +259,8 @@ public class getHousenumberlist extends HttpServlet {
 			if(! parameterOfficialkeysid.equals("")) {
 				selectMunicipalityStmt.setString(preparedmuniindex++, parameterOfficialkeysid);
 			}
-			selectMunicipalityStmt.setLong(preparedmuniindex++, parameterJobId);
+			selectMunicipalityStmt.setString(preparedmuniindex++, parameterCountry);
+			selectMunicipalityStmt.setString(preparedmuniindex++, parameterMunicipality);
 			if(! parameterOfficialkeysid.equals("")) {
 				selectMunicipalityStmt.setString(preparedmuniindex++, parameterOfficialkeysid);
 			}
@@ -279,6 +283,8 @@ public class getHousenumberlist extends HttpServlet {
 			String sourcelistuseagetext = "";
 			String sourcelistcontentdate = "";
 			String sourcelistfiledate = "";
+			int subareaLevel = 0;
+			Long subareaOsmid = 0L;
 			while(selectMunicipalityRS.next()) {
 				countMunicipalities++;
 				country = selectMunicipalityRS.getString("land");
@@ -291,6 +297,8 @@ public class getHousenumberlist extends HttpServlet {
 				sourcelistuseagetext = selectMunicipalityRS.getString("sourcelist_useagetext");
 				sourcelistcontentdate = selectMunicipalityRS.getString("sourcelist_contentdate");
 				sourcelistfiledate = selectMunicipalityRS.getString("sourcelist_filedate");
+				subareaLevel = selectMunicipalityRS.getInt("admin_level");
+				subareaOsmid = selectMunicipalityRS.getLong("osm_id");
 				if(		(selectMunicipalityRS.getString("officialgeocoordinates") != null)
 					&& 	(selectMunicipalityRS.getString("officialgeocoordinates").equals("y"))) {
 					officialgeocoordinates = true;
@@ -304,7 +312,51 @@ public class getHousenumberlist extends HttpServlet {
 			selectMunicipalityStmt.close();
 			requestEndtime = new java.util.Date();
 			System.out.println("time for query for municipality in sec: " + (requestEndtime.getTime() - requestStarttime.getTime())/1000);
+	
+				// if found municipality don't have a job-id, it can't be processed below - stop here
+			if(municipalityJobId == 0) {
+				String errormessage = "Error: No jobs found to requested municipality '" + municipality
+					+ "' in country '" + country + "', so housenumber list can't be delivered";
+				System.out.println(errormessage);
+				errormessage = " (cont.) subarea osm_id: " + subareaOsmid + ", admin_level: " + subareaLevel;
+				System.out.println(errormessage);
+				
+					// output Character Encoding MUST BE SET previously to response.getWriter to work !!!
+				response.setContentType("text/plain;charset=UTF-8");
+				response.setHeader("Content-Encoding", "UTF-8");
+				response.setStatus(HttpServletResponse.SC_NOT_FOUND);
+	
+				PrintWriter writer = response.getWriter();
+				writer.println(errormessage);
+				writer.close();
 
+					// change jobqueue entry to disable it for further processing
+				if(parameterServerobjectid.indexOf("jobqueue:") == 0) {
+					String serverobjectid_parts[] = parameterServerobjectid.split(":");
+					if(serverobjectid_parts.length == 2) {
+						String updateJobqueueSql = "UPDATE jobqueue set state = 'fail-nojob'";
+						updateJobqueueSql += " WHERE";
+						updateJobqueueSql += " id = ? AND";
+						updateJobqueueSql += " state = 'open';";
+						updateJobqueueSql += ";";
+						PreparedStatement updateJobqueueStmt = housenumberConn.prepareStatement(updateJobqueueSql);
+						updateJobqueueStmt.setLong(1, Long.parseLong(serverobjectid_parts[1]));
+						System.out.println("change jobqueue Entry to fail with statement ===" +
+							updateJobqueueStmt + "===");
+						updateJobqueueStmt.executeUpdate();
+						updateJobqueueStmt.close();
+					} else {
+						System.out.println("Error in getHousenumberlist: unknown structure in Serverobjectid, id complete ===" + parameterServerobjectid + "===, will be ignored");
+					}
+				} else {
+					System.out.println("Warning in getHousenumberlist: unknown Serverobjectid Prefix, id complete ===" + parameterServerobjectid + "===, will be ignored");
+				}
+
+				System.out.println("End getHousenumberlist/doPost at " + requestEndtime.toString() 
+					+ ",   Duration was " + (requestEndtime.getTime() - requestStarttime.getTime())+ " ms !");
+				return;
+			}
+			
 				// if more than one municipalities found, stop with a warning
 			if(countMunicipalities > 1) {
 				String errormessage = "Error: Number of municipalities, that fit to requested municipality '" + municipality
@@ -319,20 +371,45 @@ public class getHousenumberlist extends HttpServlet {
 				PrintWriter writer = response.getWriter();
 				writer.println(errormessage);
 				writer.close();
+
+					// change jobqueue entry to disable it for further processing
+				if(parameterServerobjectid.indexOf("jobqueue:") == 0) {
+					String serverobjectid_parts[] = parameterServerobjectid.split(":");
+					if(serverobjectid_parts.length == 2) {
+						String updateJobqueueSql = "UPDATE jobqueue set state = 'fail-notuniquemunicipality'";
+						updateJobqueueSql += " WHERE";
+						updateJobqueueSql += " id = ? AND";
+						updateJobqueueSql += " state = 'open';";
+						updateJobqueueSql += ";";
+						PreparedStatement updateJobqueueStmt = housenumberConn.prepareStatement(updateJobqueueSql);
+						updateJobqueueStmt.setLong(1, Long.parseLong(serverobjectid_parts[1]));
+						System.out.println("change jobqueue Entry to fail with statement ===" +
+								updateJobqueueStmt + "===");
+						updateJobqueueStmt.executeUpdate();
+						updateJobqueueStmt.close();
+					} else {
+						System.out.println("Error in getHousenumberlist: unknown structure in Serverobjectid, id complete ===" + parameterServerobjectid + "===, will be ignored");
+					}
+				} else {
+					System.out.println("Warning in getHousenumberlist: unknown Serverobjectid Prefix, id complete ===" + parameterServerobjectid + "===, will be ignored");
+				}
+
+				
+				
 				System.out.println("Ende getHousenumberlist/doPost at " + requestEndtime.toString() 
 					+ ",   Duration was " + (requestEndtime.getTime() - requestStarttime.getTime())+ " ms !");
 				return;
 			}
 			
 			
-			String selectPolygonSql = "SELECT g.polygon as polygon900913, " +
+			String selectPolygonSql = "SELECT g.polygon AS polygon900913, " +
 				"ST_Transform(g.polygon,4326) AS polygon4326, " +
 				"ST_GeometryType(g.polygon) AS polygontype, " +
-				"j.id as job_id " +
+				"j.id AS job_id, g.id AS subarea_dbid " +
 				"FROM jobs AS j JOIN gebiete AS g ON j.gebiete_id = g.id " +
 				"WHERE " +
 				"j.id = ?;";
-			PreparedStatement selectPolygonStmt = con_hausnummern.prepareStatement(selectPolygonSql);
+			PreparedStatement selectPolygonStmt = housenumberConn.prepareStatement(selectPolygonSql);
 			selectPolygonStmt.setLong(1, municipalityJobId);
 			System.out.println("polygon query: " + selectPolygonStmt.toString() + "===");
 
@@ -343,7 +420,8 @@ public class getHousenumberlist extends HttpServlet {
 			String polygon900913 = "";
 			String polygon4326 = "";
 			String polygontype = "";
-			Long jobid = 0L;
+			long subareaDbid = 0;
+			long jobid = 0;
 			while(selectPolygonRS.next()) {
 				polygon900913 = selectPolygonRS.getString("polygon900913");
 				polygon4326 = selectPolygonRS.getString("polygon4326");
@@ -351,6 +429,7 @@ public class getHousenumberlist extends HttpServlet {
 				if(polygontype.indexOf("ST_") == 0)
 					polygontype = "::" + polygontype.substring(3);	// take type of geometry starting at pos 3 after Prefix "ST_"
 				jobid = selectPolygonRS.getLong("job_id");
+				subareaDbid = selectPolygonRS.getLong("subarea_id");
 			}
 			selectPolygonStmt.close();
 			requestEndtime = new java.util.Date();
@@ -382,7 +461,7 @@ public class getHousenumberlist extends HttpServlet {
 				sqlqueryofficialhousenumbers += "ST_Within(point,?::geometry) ";
 				sqlqueryofficialhousenumbers += "ORDER BY correctorder(strasse), hausnummer_sortierbar;";
 
-				queryofficialhousenumbersStmt = con_hausnummern.prepareStatement(sqlqueryofficialhousenumbers);
+				queryofficialhousenumbersStmt = housenumberConn.prepareStatement(sqlqueryofficialhousenumbers);
 				int preparedindex = 1;
 				queryofficialhousenumbersStmt.setLong(preparedindex++, jobid);
 				if(! parameterSubid.equals("-1")) {
@@ -405,7 +484,7 @@ public class getHousenumberlist extends HttpServlet {
 					sqlqueryofficialhousenumbers += "AND ((sh.sub_id = ?) OR (sh.sub_id = '-1')) ";
 				sqlqueryofficialhousenumbers += " ORDER BY correctorder(strasse), hausnummer_sortierbar;";
 
-				queryofficialhousenumbersStmt = con_hausnummern.prepareStatement(sqlqueryofficialhousenumbers);
+				queryofficialhousenumbersStmt = housenumberConn.prepareStatement(sqlqueryofficialhousenumbers);
 				int preparedindex = 1;
 				queryofficialhousenumbersStmt.setLong(preparedindex++, jobid);
 				if(! parameterSubid.equals("-1")) {
@@ -453,7 +532,7 @@ public class getHousenumberlist extends HttpServlet {
 					sqlqueryofficialhousenumbers += " AND (sub_id = ? OR sub_id = '-1')";
 				sqlqueryofficialhousenumbers += " ORDER BY correctorder(strasse), hausnummer_sortierbar;";
 
-				queryofficialhousenumbersStmt = con_hausnummern.prepareStatement(sqlqueryofficialhousenumbers);
+				queryofficialhousenumbersStmt = housenumberConn.prepareStatement(sqlqueryofficialhousenumbers);
 				int preparedindex = 1;
 				queryofficialhousenumbersStmt.setLong(preparedindex++, municipalityId);
 				queryofficialhousenumbersStmt.setLong(preparedindex++, municipalityJobId);
@@ -466,9 +545,21 @@ public class getHousenumberlist extends HttpServlet {
 				if(! parameterSubid.equals("-1")) {
 					queryofficialhousenumbersStmt.setString(preparedindex++, parameterSubid);
 				}
-				System.out.println("official housenumber list query, else case: " + queryofficialhousenumbersStmt.toString() + "===");
-			}
 
+				System.out.println("official housenumber list query, else case: " + sqlqueryofficialhousenumbers + "===");
+				System.out.println("SQL-Parameters");
+				System.out.println("                            municipalityId  (1): " + municipalityId);
+				System.out.println("                          municipalityJobId (2): " + municipalityJobId);
+				System.out.println("polygon in srid 900913 - table gebiete dbid (3): " + subareaDbid);
+				System.out.println("polygon in srid 900913 - table gebiete dbid (4): " + subareaDbid);
+				System.out.println("                             municipalityId (5): " + municipalityId);
+				System.out.println("                          municipalityJobId (6): " + municipalityJobId);
+				System.out.println("polygon in srid   4326 - table gebiete dbid (7): " + subareaDbid);
+				System.out.println("                             municipalityId (8): " + municipalityId);
+				if(! parameterSubid.equals("-1")) {
+					System.out.println("parameterSubid: " + parameterSubid);
+				}
+			}
 
 			ResultSet rsqueryofficialhousenumbers = queryofficialhousenumbersStmt.executeQuery();
 
@@ -551,9 +642,10 @@ public class getHousenumberlist extends HttpServlet {
 						updateJobqueueSql += " id = ? AND";
 						updateJobqueueSql += " state = 'open';";
 						updateJobqueueSql += ";";
-						PreparedStatement updateJobqueueStmt = con_hausnummern.prepareStatement(updateJobqueueSql);
+						PreparedStatement updateJobqueueStmt = housenumberConn.prepareStatement(updateJobqueueSql);
 						updateJobqueueStmt.setLong(1, Long.parseLong(serverobjectid_parts[1]));
 						updateJobqueueStmt.executeUpdate();
+						updateJobqueueStmt.close();
 					} else {
 						System.out.println("Error in getHousenumberlist: unknown structure in Serverobjectid, id complete ===" + parameterServerobjectid + "===, will be ignored");
 					}

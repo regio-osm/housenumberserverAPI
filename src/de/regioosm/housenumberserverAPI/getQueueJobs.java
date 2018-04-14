@@ -50,7 +50,7 @@ public class getQueueJobs extends HttpServlet {
 	private static final long serialVersionUID = 1L;
 		// load content of configuration file, which contains filesystem entries and database connection details
 	static Applicationconfiguration configuration;
-	static Connection con_hausnummern;
+	static Connection housenumberConn;
 
     /**
      * @see HttpServlet#HttpServlet()
@@ -64,7 +64,7 @@ public class getQueueJobs extends HttpServlet {
      * initialization on servlett startup
      */
     public void 	init(ServletConfig config) {
-    	System.out.println("\n\nok, servlet v20170107 " + config.getServletName() + " will be initialized now ...\n");
+    	System.out.println("\n\nok, servlet v20180413 " + config.getServletName() + " will be initialized now ...\n");
 
 		String path = config.getServletContext().getRealPath("/WEB-INF");
 		configuration = new Applicationconfiguration(path);
@@ -73,7 +73,8 @@ public class getQueueJobs extends HttpServlet {
 		Class.forName("org.postgresql.Driver");
 		
 		String url_hausnummern = configuration.db_application_url;
-		con_hausnummern = DriverManager.getConnection(url_hausnummern, configuration.db_application_username, configuration.db_application_password);
+		housenumberConn = DriverManager.getConnection(url_hausnummern, 
+			configuration.db_application_username, configuration.db_application_password);
 		} 
 		catch(ClassNotFoundException e) {
 			e.printStackTrace();
@@ -87,13 +88,13 @@ public class getQueueJobs extends HttpServlet {
 	}
 
     /**
-     * destroy at aned of servlett life
+     * destroy at end of servlet life
      */
     public void 	destroy(){
     	System.out.println("\n\nok, servlet will be destroyed now ...\n");
 
     	try {
-    		con_hausnummern.close();
+    		housenumberConn.close();
 			System.out.println("after closed DB-Connection");
     	}
 		catch( SQLException e) {
@@ -126,14 +127,12 @@ public class getQueueJobs extends HttpServlet {
 	protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
 
 		String select_queuejobssql = "";
-		String select_sql = "";
-		String existingpreparedParameters = "";
 
 		PreparedStatement selectqueuejobsqueryStmt = null;
 		ResultSet queuejobsqueryRS = null;
 		
 		try {
-			System.out.println("\nBeginn getQueueJobs/doPost v20170107 ... " + new Date());
+			System.out.println("\nBeginn getQueueJobs/doPost v20180413 ... " + new Date());
 			System.out.println("request komplett ===" + request.toString() + "===");
 
 			MultipartMap map = new MultipartMap(request, this);
@@ -153,117 +152,88 @@ public class getQueueJobs extends HttpServlet {
 			System.out.println(" maxjobcount   ===" + maxjobcount + "===");
 
 
-			select_queuejobssql = "SELECT jq.id AS id, jq.countrycode AS countrycode, municipality, jobname, requestreason,"
-				+ " requesttime, scheduletime, priority, state"
-				+ " FROM jobqueue AS jq, land AS l WHERE"
-				+ " state = 'open' AND"
-				+ " (";
-			if(		requestreason.equals("regular") 
-				||	requestreason.equals("")) {
-				select_queuejobssql += " (scheduletime < now())";
+			select_queuejobssql = "SELECT jq.id AS id, jq.countrycode AS countrycode, " +
+				"municipality, jobname, job_id, requestreason, " +
+				"requesttime, scheduletime, priority, state " +
+				"FROM jobqueue AS jq JOIN land AS l ON jq.countrycode = l.countrycode " +
+				"WHERE state = 'open' AND " +
+				" (";
+			if (requestreason.equals("regular") ||  
+				requestreason.equals("")) {
+				select_queuejobssql += " (scheduletime < now()) ";
 			}
-			if(	requestreason.equals("")) {
+			if (requestreason.equals("")) {
 				select_queuejobssql += " OR";
 			}
-			if(		requestreason.equals("instant") 
-					||	requestreason.equals("")) {
-				select_queuejobssql += " (requestreason = 'instant')";
+			if (requestreason.equals("instant") || 
+				requestreason.equals("")) {
+				select_queuejobssql += " (requestreason = 'instant') ";
 			}
-			select_queuejobssql += ")"
-				+ " AND jq.countrycode = l.countrycode"
-				+ " AND l.land like ?"
-				+ " ORDER BY scheduletime, requesttime, priority DESC"
-				+ " LIMIT ?;";
+			select_queuejobssql += ") " +
+				"AND l.land like ? " +
+				"ORDER BY scheduletime, requesttime, priority DESC " +
+				" LIMIT ?;";
 
-			selectqueuejobsqueryStmt = con_hausnummern.prepareStatement(select_queuejobssql);
+			selectqueuejobsqueryStmt = housenumberConn.prepareStatement(select_queuejobssql);
 			
 			selectqueuejobsqueryStmt.setString(1, country);
 			selectqueuejobsqueryStmt.setInt(2, maxjobcount);
-			existingpreparedParameters = "";
-			existingpreparedParameters += "country='" + country + "'";
-			existingpreparedParameters += ", maxjobcount=" + maxjobcount;
 
 			queuejobsqueryRS = selectqueuejobsqueryStmt.executeQuery();
-			System.out.println("SQL-Query to get jobs from queue: Parameters ===" + existingpreparedParameters  + "=== query ===" + select_queuejobssql + "===");
+			System.out.println("SQL-Query to get jobs from queue ===" + 
+				selectqueuejobsqueryStmt.toString() + "===");
 
 			StringBuffer dataoutput = new StringBuffer();
 			String actoutputline = "";
 			
-			actoutputline = "#" + "Country\tCountrycode\tMunicipality\tMunicipality-Id\tAdmin-Level"
-				+ "\tJobname\tSubarea-Id\tOSM-Relation-Id\tJobqueue-Id\tJobid\n";
+			actoutputline = "#" + "Country\tCountrycode\tMunicipality\tMunicipality-Id" +
+				"\tAdmin-Level\tJobname\tSubarea-Id\tOSM-Relation-Id\tJobqueue-Id\tJobid\n";
 			dataoutput.append(actoutputline);
 			
 			Integer rowcount = 0;
 			while(queuejobsqueryRS.next()) {
 				
-				select_sql = "SELECT land.id AS countryid, land, countrycode,"
-					+ " stadt.id AS municipalityid, stadt, officialkeys_id, admin_level,"
-					+ " jobs.id AS jobid, jobname, osm_id, sub_id"
-					+ " FROM land, stadt, gebiete, jobs WHERE"
-					+ " stadt ilike ?"
-					+ " AND countrycode = ?"
-					+ " AND jobname ilike ?"
-					+ " AND stadt.land_id = land.id"
-					+ " AND gebiete.stadt_id = stadt.id"
-					+ " AND jobs.gebiete_id = gebiete.id"
-					+ " ORDER BY land, stadt, admin_level, jobname;";		// sort admin_level asc is important, so that main evaluation of a municipality will be make first
+				String jobQuerySql = "SELECT country.id AS countryid, land, countrycode," +
+					"muni.id AS municipalityid, stadt, officialkeys_id, admin_level, " + 
+					"jobs.id AS jobid, jobname, osm_id, sub_id " +
+					"FROM land AS country JOIN stadt AS muni ON muni.land_id = country.id " +
+					"JOIN gebiete AS subarea ON subarea.stadt_id = muni.id " +
+					"JOIN jobs ON jobs.gebiete_id = subarea.id " +
+					"WHERE jobs.id = ? " +
+					"ORDER BY land, stadt, admin_level, jobname;";		// sort admin_level asc is important, so that main evaluation of a municipality will be make first
 
-				PreparedStatement JobQueryStmt = con_hausnummern.prepareStatement(select_sql);
-				existingpreparedParameters = "";
-				String actvalue = "%";
-				if(queuejobsqueryRS.getString("municipality") != null) {
-					actvalue = queuejobsqueryRS.getString("municipality");
-					actvalue = actvalue.replace("*","%");
-				}
-				JobQueryStmt.setString(1, actvalue);
-				existingpreparedParameters += "municipality='" + actvalue + "'";
-				actvalue = "%";
-				if(queuejobsqueryRS.getString("countrycode") != null) {
-					actvalue = queuejobsqueryRS.getString("countrycode");
-					actvalue = actvalue.replace("*","%");
-				}
-				JobQueryStmt.setString(2, actvalue);
-				existingpreparedParameters += ", countrycode='" + actvalue + "'";
-				actvalue = "%";
-				if(queuejobsqueryRS.getString("jobname") != null) {
-					actvalue = queuejobsqueryRS.getString("jobname");
-					actvalue = actvalue.replace("*","%");
-				}
-				JobQueryStmt.setString(3, actvalue);
-				existingpreparedParameters += ", jobname='" + actvalue + "'";
+				PreparedStatement JobQueryStmt = housenumberConn.prepareStatement(jobQuerySql);
+				JobQueryStmt.setLong(1, queuejobsqueryRS.getLong("job_id"));
+				System.out.println("existing muni query ===" + JobQueryStmt.toString() + "===");
 
-				System.out.println("existing muni query: Parameters " + existingpreparedParameters + "     \n===" + select_sql + "===");
 				ResultSet jobQueryRS = JobQueryStmt.executeQuery();
-				select_sql = "";
-				existingpreparedParameters = "";
 				while(jobQueryRS.next()) {
 					Long osm_id = jobQueryRS.getLong("osm_id");
 					if(osm_id < 0)
 						osm_id = Math.abs(osm_id);
 
-					actoutputline = jobQueryRS.getString("land") + "\t"
-						+ jobQueryRS.getString("countrycode") + "\t"
-						+ jobQueryRS.getString("stadt") + "\t"
-						+ jobQueryRS.getString("officialkeys_id") + "\t"
-						+ jobQueryRS.getInt("admin_level") + "\t"
-						+ jobQueryRS.getString("jobname") + "\t"
-						+ jobQueryRS.getString("sub_id") + "\t"
-						+ osm_id + "\t"
-						+ "jobqueue:"+ queuejobsqueryRS.getInt("id") + "\t"
-						+ jobQueryRS.getString("jobid")
-						+ "\n";
+					actoutputline = jobQueryRS.getString("land") + "\t" +
+						jobQueryRS.getString("countrycode") + "\t" +
+						jobQueryRS.getString("stadt") + "\t" +
+						jobQueryRS.getString("officialkeys_id") + "\t" +
+						jobQueryRS.getInt("admin_level") + "\t" +
+						jobQueryRS.getString("jobname") + "\t" +
+						jobQueryRS.getString("sub_id") + "\t" +
+						osm_id + "\t" +
+						"jobqueue:"+ queuejobsqueryRS.getInt("id") + "\t" +
+						jobQueryRS.getString("jobid") + "\n";
 					dataoutput.append(actoutputline);
-					System.out.println("rowcount now " + (rowcount + 1) + ":   dataoutput.append now with ===" + actoutputline + "===    length: " + dataoutput.length());
+					//System.out.println("rowcount now " + (rowcount + 1) + 
+					//	":   dataoutput.append now with ===" + actoutputline + "===    length: " + dataoutput.length());
 					rowcount++;
 				}
 				if(rowcount > maxjobcount) {
-					System.out.println("Info: stop adding result jobs, limit reached, dataoutput.length: " + dataoutput.length());
+					System.out.println("Info: stop adding result jobs, " +
+						"limit reached, dataoutput.length: " + dataoutput.length());
 					break;
 				}
 				jobQueryRS.close();
-				System.out.println("before JobQueryStmt.close");
 				JobQueryStmt.close();
-				System.out.println("after JobQueryStmt.close, dataoutput.length: " + dataoutput.length());
 			}
 			System.out.println("after job-loop result content ===" + dataoutput.toString() + "=== length: " + dataoutput.length());
 			queuejobsqueryRS.close();
@@ -288,9 +258,6 @@ public class getQueueJobs extends HttpServlet {
 		} // end of try to connect to DB and operate with DB
 		catch( SQLException e) {
 			System.out.println("SQLException happened, details follows ...");
-			System.out.println("sql query parameters ===" + existingpreparedParameters + "===");
-			System.out.println("sql query was probably ===" + select_sql + "===");
-			System.out.println("sql job-query was probably ===" + select_queuejobssql + "===");
 			e.printStackTrace();
 			try {
 				if(queuejobsqueryRS != null)
