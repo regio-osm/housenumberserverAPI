@@ -196,7 +196,7 @@ public class getHousenumberlist extends HttpServlet {
 		try {
 			requestStarttime = new java.util.Date();
 
-			System.out.println("\n\nBeginn getHousenumberlist/doPost v20180408 at " + requestStarttime.toString() + " ...");
+			System.out.println("\n\nBeginn getHousenumberlist/doPost v20180511 at " + requestStarttime.toString() + " ...");
 			System.out.println("request komplett ===" + request.toString() + "===");
 
 			String parameterCountry = URLDecoder.decode(request.getParameter("country"),"UTF-8");
@@ -402,10 +402,10 @@ public class getHousenumberlist extends HttpServlet {
 			}
 			
 			
-			String selectPolygonSql = "SELECT g.polygon as polygon900913, " +
+			String selectPolygonSql = "SELECT g.polygon AS polygon900913, " +
 				"ST_Transform(g.polygon,4326) AS polygon4326, " +
 				"ST_GeometryType(g.polygon) AS polygontype, " +
-				"j.id as job_id " +
+				"j.id AS job_id, g.id AS subarea_dbid " +
 				"FROM jobs AS j JOIN gebiete AS g ON j.gebiete_id = g.id " +
 				"WHERE " +
 				"j.id = ?;";
@@ -420,7 +420,8 @@ public class getHousenumberlist extends HttpServlet {
 			String polygon900913 = "";
 			String polygon4326 = "";
 			String polygontype = "";
-			Long jobid = 0L;
+			long subareaDbid = 0;
+			long jobid = 0;
 			while(selectPolygonRS.next()) {
 				polygon900913 = selectPolygonRS.getString("polygon900913");
 				polygon4326 = selectPolygonRS.getString("polygon4326");
@@ -428,6 +429,7 @@ public class getHousenumberlist extends HttpServlet {
 				if(polygontype.indexOf("ST_") == 0)
 					polygontype = "::" + polygontype.substring(3);	// take type of geometry starting at pos 3 after Prefix "ST_"
 				jobid = selectPolygonRS.getLong("job_id");
+				subareaDbid = selectPolygonRS.getLong("subarea_id");
 			}
 			selectPolygonStmt.close();
 			requestEndtime = new java.util.Date();
@@ -543,9 +545,21 @@ public class getHousenumberlist extends HttpServlet {
 				if(! parameterSubid.equals("-1")) {
 					queryofficialhousenumbersStmt.setString(preparedindex++, parameterSubid);
 				}
-				System.out.println("official housenumber list query, else case: " + queryofficialhousenumbersStmt.toString() + "===");
-			}
 
+				System.out.println("official housenumber list query, else case: " + sqlqueryofficialhousenumbers + "===");
+				System.out.println("SQL-Parameters");
+				System.out.println("                            municipalityId  (1): " + municipalityId);
+				System.out.println("                          municipalityJobId (2): " + municipalityJobId);
+				System.out.println("polygon in srid 900913 - table gebiete dbid (3): " + subareaDbid);
+				System.out.println("polygon in srid 900913 - table gebiete dbid (4): " + subareaDbid);
+				System.out.println("                             municipalityId (5): " + municipalityId);
+				System.out.println("                          municipalityJobId (6): " + municipalityJobId);
+				System.out.println("polygon in srid   4326 - table gebiete dbid (7): " + subareaDbid);
+				System.out.println("                             municipalityId (8): " + municipalityId);
+				if(! parameterSubid.equals("-1")) {
+					System.out.println("parameterSubid: " + parameterSubid);
+				}
+			}
 
 			ResultSet rsqueryofficialhousenumbers = queryofficialhousenumbersStmt.executeQuery();
 
