@@ -429,7 +429,7 @@ public class getHousenumberlist extends HttpServlet {
 				if(polygontype.indexOf("ST_") == 0)
 					polygontype = "::" + polygontype.substring(3);	// take type of geometry starting at pos 3 after Prefix "ST_"
 				jobid = selectPolygonRS.getLong("job_id");
-				subareaDbid = selectPolygonRS.getLong("subarea_id");
+				subareaDbid = selectPolygonRS.getLong("subarea_dbid");
 			}
 			selectPolygonStmt.close();
 			requestEndtime = new java.util.Date();
